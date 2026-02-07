@@ -35,11 +35,23 @@ Splice에서 다운로드한 오디오 샘플을 로컬에서 탐색하고 미�
 
 ### 다운로드
 
-[Releases](https://github.com/your-username/slice/releases) 페이지에서 최신 버전의 `.dmg` 파일을 다운로드하세요.
+[Releases](https://github.com/ljho01/slice/releases) 페이지에서 최신 버전을 다운로드하세요.
 
-1. `Slice_x.x.x_aarch64.dmg` (Apple Silicon) 또는 `Slice_x.x.x_x64.dmg` (Intel) 다운로드
-2. DMG 파일을 열고 `Slice.app`을 Applications 폴더로 드래그
-3. Slice 실행
+**설치 방법:**
+
+1. `Slice.app.tar.gz` 다운로드 (Apple Silicon Mac용)
+2. 압축 해제
+3. `Slice.app`을 Applications 폴더로 드래그
+4. **첫 실행 시**: 앱을 우클릭 → **"열기"** 클릭 → "열기" 확인
+   
+   > ⚠️ Apple 개발자 서명이 없어 macOS가 경고를 표시합니다. 
+   > 우클릭 → 열기로 첫 실행하면 이후에는 정상 실행됩니다.
+
+**또는 터미널로 실행 허용:**
+
+```bash
+xattr -d com.apple.quarantine /Applications/Slice.app
+```
 
 ## 개발
 

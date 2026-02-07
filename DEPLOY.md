@@ -167,6 +167,40 @@ export TAURI_SIGNING_PRIVATE_KEY_PASSWORD="slice-updater-key"
 - [ ] `latest.json`의 `signature`와 `url`이 올바른가?
 - [ ] Release가 발행되었는가?
 
+## Apple 개발자 서명 (선택 사항)
+
+### 서명 없이 배포 시
+
+- 사용자가 "악성 소프트웨어를 확인할 수 없습니다" 경고를 받음
+- 우클릭 → 열기로 첫 실행해야 함
+- 자동 업데이트는 정상 작동 (이미 설치된 앱이므로)
+
+### Apple Developer ID로 서명하기 (권장)
+
+**비용**: $99/년 (Apple Developer Program)
+
+**설정 방법**:
+
+1. Apple Developer Program 가입
+2. Xcode에서 Developer ID 인증서 다운로드
+3. 빌드 시 서명:
+
+```bash
+# 빌드 후
+codesign --deep --force --verify --verbose --sign "Developer ID Application: Your Name (TEAM_ID)" \
+  src-tauri/target/release/bundle/macos/Slice.app
+
+# 공증 (notarization)
+xcrun notarytool submit src-tauri/target/release/bundle/macos/Slice.app.tar.gz \
+  --apple-id your-email@example.com \
+  --password app-specific-password \
+  --team-id TEAM_ID \
+  --wait
+
+# 공증 완료 후 staple
+xcrun stapler staple src-tauri/target/release/bundle/macos/Slice.app
+```
+
 ## 문제 해결
 
 ### 빌드 실패
