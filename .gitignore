@@ -1,0 +1,57 @@
+# 의존성
+node_modules/
+bun.lockb
+
+# 빌드 결과물
+dist/
+dist-ssr/
+target/
+src-tauri/target/
+
+# Tauri
+src-tauri/gen/
+src-tauri/WixTools/
+
+# 로그
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 에디터
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# 환경 변수
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# 테스트 샘플 파일
+sounds/
+
+# 데이터베이스
+slice.db
+slice.db-shm
+slice.db-wal
+
+# 외부 임포트 폴더
+External/
+
+# 캐시
+.cache/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Tauri 빌드 캐시
+.tauri-cache/
