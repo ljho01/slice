@@ -50,7 +50,7 @@
       "active": true,
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEE2OTk4NUNBRjUyNThDM0IKUldRN2pDWDF5b1dacHZBWVhNTU1ibFpCZmc2b0hLUE1LNFVJWFlsdkF4d0lSNHVsZDZSV0IrYTcK",
       "endpoints": [
-        "https://github.com/{{owner}}/{{repo}}/releases/latest/download/latest.json"
+        "https://github.com/ljho01/slice/releases/latest/download/latest.json"
       ]
     }
   }
