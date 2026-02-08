@@ -6,6 +6,10 @@
 macOS Splice 앱의 SQLite DB(`~/Library/Application Support/com.splice.Splice/...`)에서 팩/샘플 메타데이터를 읽어
 `~/Slice/` 디렉토리에 오디오 파일을 복사하고, 자체 SQLite DB(`~/Slice/slice.db`)로 관리한다.
 
+**모노레포 구조:**
+- `apps/desktop`: Tauri v2 기반 데스크톱 앱
+- `apps/landing`: 웹 랜딩페이지 (React + Vite)
+
 ## 기술 스택
 
 | 레이어 | 기술 |
@@ -24,39 +28,39 @@ macOS Splice 앱의 SQLite DB(`~/Library/Application Support/com.splice.Splice/.
 
 ```
 slice/
-├── src/                          # 프론트엔드 (React + TypeScript)
-│   ├── main.tsx                  # 엔트리포인트
-│   ├── App.tsx                   # 메인 앱 컴포넌트 (상태 관리, 오디오 재생)
-│   ├── types.ts                  # 공유 타입 정의 (Pack, Sample, WaveformData 등)
-│   ├── index.css                 # Tailwind 설정 + 다크/라이트 테마 CSS 변수
-│   ├── lib/
-│   │   └── utils.ts              # cn() 유틸 (clsx + tailwind-merge)
-│   └── components/
-│       ├── NavRail.tsx           # 좌측 네비게이션 (Packs / Sounds 탭)
-│       ├── PacksView.tsx         # 팩 그리드 뷰 (검색, 팩 카드)
-│       ├── SampleBrowser.tsx     # 샘플 리스트 (필터, 태그, 가상 스크롤, 미니 파형)
-│       ├── Player.tsx            # 하단 오디오 플레이어 (재생/정지, 파형 시크, 트랜스포즈)
-│       ├── Waveform.tsx          # SVG 파형 시각화 컴포넌트
-│       ├── ImportScreen.tsx      # Splice 임포트 화면 (진행 상황 표시)
-│       └── ui/                   # shadcn/ui 기반 프리미티브 컴포넌트
-│           ├── badge.tsx
-│           ├── button.tsx
-│           ├── checkbox.tsx
-│           ├── input.tsx
-│           ├── popover.tsx
-│           ├── scroll-area.tsx
-│           └── slider.tsx
-├── src-tauri/                    # Rust 백엔드 (Tauri)
-│   ├── Cargo.toml                # Rust 의존성
-│   ├── src/
-│   │   ├── main.rs               # 바이너리 엔트리포인트
-│   │   └── lib.rs                # 모든 Tauri 커맨드, DB 로직, 파형 계산
-│   ├── capabilities/             # Tauri 보안 정책
-│   └── icons/                    # 앱 아이콘
-├── package.json
-├── vite.config.ts                # Vite 설정 (@, Tauri dev host 등)
-├── tsconfig.json                 # TypeScript 설정 (@ 경로 별칭)
-└── sounds/                       # 테스트용 샘플 파일 (git 미추적)
+├── apps/
+│   ├── desktop/                  # Tauri 데스크톱 앱
+│   │   ├── src/                  # 프론트엔드 (React + TypeScript)
+│   │   │   ├── main.tsx          # 엔트리포인트
+│   │   │   ├── App.tsx           # 메인 앱 컴포넌트
+│   │   │   ├── types.ts          # 공유 타입 정의
+│   │   │   ├── index.css         # Tailwind 설정
+│   │   │   ├── lib/
+│   │   │   │   └── utils.ts      # cn() 유틸
+│   │   │   ├── routes/           # 라우트 페이지
+│   │   │   └── components/       # UI 컴포넌트
+│   │   ├── src-tauri/            # Rust 백엔드
+│   │   │   ├── Cargo.toml
+│   │   │   ├── src/
+│   │   │   │   ├── main.rs
+│   │   │   │   └── lib.rs
+│   │   │   ├── capabilities/
+│   │   │   └── icons/
+│   │   ├── package.json
+│   │   ├── vite.config.ts
+│   │   └── tsconfig.json
+│   └── landing/                  # 웹 랜딩페이지
+│       ├── src/
+│       │   ├── main.tsx
+│       │   ├── App.tsx
+│       │   └── index.css
+│       ├── public/
+│       │   └── icon.png
+│       ├── package.json
+│       ├── vite.config.ts
+│       └── tsconfig.json
+├── package.json                  # 모노레포 루트 (workspaces)
+└── bun.lock
 ```
 
 ## 핵심 아키텍처
@@ -149,23 +153,27 @@ loading → check_library_status →┬─ has_data: true  → ready (메인 UI)
 ## 개발 환경
 
 ```bash
-# 개발 서버 실행 (Vite + Tauri)
-bun run tauri dev
+# 데스크톱 앱 개발 서버 (Vite + Tauri)
+bun run dev:desktop    # localhost:1420
 
-# 프론트엔드만
-bun run dev        # localhost:1420
+# 랜딩페이지 개발 서버
+bun run dev:landing    # localhost:3000
 
 # 빌드
-bun run tauri build
+bun run build:desktop  # 데스크톱 앱
+bun run build:landing  # 랜딩페이지
 
-# 패키지 설치
+# 패키지 설치 (루트에서)
 bun install
-bun add <package>
-bun add -d <dev-package>
+
+# 특정 앱에 패키지 추가
+bun --cwd apps/desktop add <package>
+bun --cwd apps/landing add <package>
 ```
 
 > **필수:** 패키지 매니저는 반드시 **Bun**을 사용한다. `npm`, `yarn`, `pnpm` 명령어 사용 금지.
 > 의존성 설치는 `bun install`, 패키지 추가는 `bun add`, 스크립트 실행은 `bun run`을 사용한다.
+> 모노레포 구조에서 특정 앱의 의존성을 추가할 때는 `bun --cwd apps/<app-name> add`를 사용한다.
 
 ## 주의사항
 

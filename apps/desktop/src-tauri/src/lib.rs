@@ -616,18 +616,18 @@ fn decode_audio_mono(file_path: &str, max_seconds: Option<f64>) -> Result<(Vec<f
 // ── BPM detection from audio ────────────────────────────────────────
 
 fn detect_bpm_from_audio(file_path: &str) -> Option<i32> {
-    // 최대 15초만 디코딩
-    let (samples, sample_rate) = decode_audio_mono(file_path, Some(15.0)).ok()?;
-    if samples.len() < sample_rate as usize {
-        return None; // 1초 미만이면 BPM 감지 불가
+    // 최대 30초까지 디코딩 (더 긴 분석 윈도우로 정확도 향상)
+    let (samples, sample_rate) = decode_audio_mono(file_path, Some(30.0)).ok()?;
+    if samples.len() < sample_rate as usize * 2 {
+        return None; // 2초 미만이면 BPM 감지 불가
     }
 
     let sr = sample_rate as f64;
 
-    // 1. 에너지 envelope 계산 (10ms 윈도우, 5ms hop)
-    let window_size = (sr * 0.01) as usize; // 10ms
-    let hop_size = window_size / 2;
-    if window_size == 0 {
+    // 1. 에너지 envelope 계산 (20ms 윈도우, 10ms hop — 더 안정적)
+    let window_size = (sr * 0.02) as usize;
+    let hop_size = (sr * 0.01) as usize;
+    if window_size == 0 || hop_size == 0 {
         return None;
     }
 
@@ -637,19 +637,23 @@ fn detect_bpm_from_audio(file_path: &str) -> Option<i32> {
         let e: f64 = samples[i..i + window_size]
             .iter()
             .map(|s| (*s as f64) * (*s as f64))
-            .sum();
+            .sum::<f64>()
+            / window_size as f64;
         energy.push(e);
         i += hop_size;
     }
 
-    if energy.len() < 10 {
+    if energy.len() < 20 {
         return None;
     }
 
-    // 2. Onset detection (반파 정류된 1차 차분)
+    // 2. Log-compressed 에너지로 onset detection (다이나믹 레인지 개선)
+    let log_energy: Vec<f64> = energy.iter().map(|e| (e + 1e-10).ln()).collect();
+
+    // 반파 정류된 1차 차분
     let mut onset: Vec<f64> = vec![0.0];
-    for i in 1..energy.len() {
-        let diff = energy[i] - energy[i - 1];
+    for idx in 1..log_energy.len() {
+        let diff = log_energy[idx] - log_energy[idx - 1];
         onset.push(if diff > 0.0 { diff } else { 0.0 });
     }
 
@@ -662,45 +666,115 @@ fn detect_bpm_from_audio(file_path: &str) -> Option<i32> {
         *v /= onset_max;
     }
 
-    // 3. Autocorrelation (BPM 60~200 범위)
+    // 3. Autocorrelation (넓은 범위 50~190 BPM 탐색 — 옥타브 보정용)
     let frames_per_sec = sr / hop_size as f64;
-    let min_lag = (frames_per_sec * 60.0 / 200.0) as usize; // 200 BPM
-    let max_lag = (frames_per_sec * 60.0 / 60.0) as usize; // 60 BPM
-    let max_lag = max_lag.min(onset.len() / 2);
+    let min_lag = (frames_per_sec * 60.0 / 190.0) as usize; // 190 BPM
+    let search_max_lag = (frames_per_sec * 60.0 / 50.0) as usize; // 50 BPM (서브하모닉 탐색)
+    let search_max_lag = search_max_lag.min(onset.len() / 2);
 
-    if min_lag >= max_lag || max_lag >= onset.len() {
+    if min_lag >= search_max_lag || search_max_lag >= onset.len() {
         return None;
     }
 
-    let mut best_lag = 0;
-    let mut best_corr = 0.0f64;
-
-    for lag in min_lag..=max_lag {
+    // 모든 lag에 대한 autocorrelation 계산
+    let mut corr_values: Vec<f64> = vec![0.0; search_max_lag + 1];
+    for lag in min_lag..=search_max_lag {
         let n = onset.len() - lag;
         let mut corr = 0.0f64;
         for j in 0..n {
             corr += onset[j] * onset[j + lag];
         }
         corr /= n as f64;
+        corr_values[lag] = corr;
+    }
 
-        if corr > best_corr {
-            best_corr = corr;
-            best_lag = lag;
+    // 4. 피크 찾기 (autocorrelation의 로컬 최대값)
+    let mut peaks: Vec<(usize, f64)> = Vec::new();
+    for lag in (min_lag + 1)..search_max_lag {
+        if corr_values[lag] > corr_values[lag - 1]
+            && corr_values[lag] > corr_values[lag + 1]
+            && corr_values[lag] > 0.0005
+        {
+            peaks.push((lag, corr_values[lag]));
         }
     }
 
-    if best_lag == 0 || best_corr < 0.001 {
+    if peaks.is_empty() {
+        // 피크가 없으면 전체 최대값 사용
+        let mut best_lag = min_lag;
+        let mut best_val = corr_values[min_lag];
+        for lag in min_lag..=search_max_lag {
+            if corr_values[lag] > best_val {
+                best_val = corr_values[lag];
+                best_lag = lag;
+            }
+        }
+        if best_val > 0.0005 {
+            peaks.push((best_lag, best_val));
+        }
+    }
+
+    if peaks.is_empty() {
         return None;
     }
 
-    // lag → BPM 변환
-    let seconds_per_beat = (best_lag as f64 * hop_size as f64) / sr;
-    let bpm_raw = 60.0 / seconds_per_beat;
+    // 상위 피크 정렬 (correlation 강도순)
+    peaks.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 
-    // 일반적인 BPM으로 반올림 (정수)
-    let bpm = bpm_raw.round() as i32;
-    if bpm >= 60 && bpm <= 200 {
-        Some(bpm)
+    // 5. 옥타브 보정: 각 피크의 BPM과 x2, /2 변형 중 최적 후보 선택
+    let mut best_score = 0.0f64;
+    let mut best_bpm = 0i32;
+
+    for &(lag, corr) in peaks.iter().take(5) {
+        let secs_per_beat = (lag as f64 * hop_size as f64) / sr;
+        let bpm_raw = 60.0 / secs_per_beat;
+
+        // 원본 BPM과 옥타브 변형 (x2, /2) 모두 시도
+        for &candidate_f in &[bpm_raw, bpm_raw * 2.0, bpm_raw / 2.0] {
+            let candidate = candidate_f.round() as i32;
+            if candidate < 60 || candidate > 190 {
+                continue;
+            }
+
+            // 가중치: 80~160 BPM 범위 선호 (가장 흔한 음악 BPM 범위)
+            let range_weight = if candidate >= 80 && candidate <= 160 {
+                1.3
+            } else {
+                1.0
+            };
+
+            // 옥타브 변형에 약간의 페널티 (원본 우선)
+            let octave_penalty = if (candidate_f - bpm_raw).abs() < 1.0 {
+                1.0
+            } else {
+                0.8
+            };
+
+            let score = corr * range_weight * octave_penalty;
+            if score > best_score {
+                best_score = score;
+                best_bpm = candidate;
+            }
+        }
+    }
+
+    // 6. 서브하모닉 확인: 너무 느린 BPM이면 더블 BPM 후보 검증
+    if best_bpm > 0 && best_bpm <= 95 {
+        let double_bpm = best_bpm * 2;
+        if double_bpm <= 190 {
+            let double_lag = (frames_per_sec * 60.0 / double_bpm as f64) as usize;
+            if double_lag >= min_lag && double_lag <= search_max_lag {
+                let double_corr = corr_values[double_lag];
+                // 더블 BPM lag의 correlation이 70% 이상이면 더블 선택
+                if double_corr > best_score * 0.7 {
+                    best_bpm = double_bpm;
+                }
+            }
+        }
+    }
+
+    if best_bpm >= 60 && best_bpm <= 190 && best_score > 0.0005 {
+        Some(best_bpm)
     } else {
         None
     }
