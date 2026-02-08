@@ -510,7 +510,7 @@ export default function SampleBrowser({
   }, [sorted, includeTags, excludeTags]);
 
   const bpmMin = useMemo(() => (meta.allBpms.length ? Math.min(...meta.allBpms) : 60), [meta.allBpms]);
-  const bpmMax = useMemo(() => (meta.allBpms.length ? Math.max(...meta.allBpms) : 200), [meta.allBpms]);
+  const bpmMax = useMemo(() => (meta.allBpms.length ? Math.max(...meta.allBpms) : 190), [meta.allBpms]);
 
   const activeCount = useMemo(() => {
     let c = selectedGenres.size + selectedInstruments.size;

@@ -783,22 +783,67 @@ fn detect_bpm_from_audio(file_path: &str) -> Option<i32> {
 // ── Filename / path parsing helpers ─────────────────────────────────
 
 fn parse_bpm_from_filename(filename: &str) -> Option<i32> {
-    // "120BPM", "120 BPM", "120bpm", "bpm120", "tempo120" 등
-    let re = Regex::new(r"(?i)(\d{2,3})\s*bpm").unwrap();
+    // "120BPM", "120 BPM", "120bpm", "120_bpm" 등
+    let re = Regex::new(r"(?i)(\d{2,3})\s*[_\-]?\s*bpm").unwrap();
     if let Some(caps) = re.captures(filename) {
         if let Ok(bpm) = caps[1].parse::<i32>() {
-            if (60..=300).contains(&bpm) {
+            if (60..=190).contains(&bpm) {
                 return Some(bpm);
             }
         }
     }
-    // "bpm120", "BPM_120"
-    let re2 = Regex::new(r"(?i)bpm[\s_-]*(\d{2,3})").unwrap();
+    // "bpm120", "BPM_120", "BPM-120"
+    let re2 = Regex::new(r"(?i)bpm[\s_\-]*(\d{2,3})").unwrap();
     if let Some(caps) = re2.captures(filename) {
         if let Ok(bpm) = caps[1].parse::<i32>() {
-            if (60..=300).contains(&bpm) {
+            if (60..=190).contains(&bpm) {
                 return Some(bpm);
             }
+        }
+    }
+    // "tempo120", "Tempo 120", "Tempo_120", "Tempo-120"
+    let re3 = Regex::new(r"(?i)tempo[\s_\-]*(\d{2,3})").unwrap();
+    if let Some(caps) = re3.captures(filename) {
+        if let Ok(bpm) = caps[1].parse::<i32>() {
+            if (60..=190).contains(&bpm) {
+                return Some(bpm);
+            }
+        }
+    }
+    // "120 Tempo", "120_Tempo"
+    let re4 = Regex::new(r"(?i)(\d{2,3})\s*[_\-]?\s*tempo").unwrap();
+    if let Some(caps) = re4.captures(filename) {
+        if let Ok(bpm) = caps[1].parse::<i32>() {
+            if (60..=190).contains(&bpm) {
+                return Some(bpm);
+            }
+        }
+    }
+    // 독립 숫자 패턴 (폴백): 구분자 사이 2~3자리 숫자를 BPM으로 추정
+    // bit, bar, k, hz, db, ch, st 등 비-BPM 접미사가 붙은 숫자는 제외
+    let re5 = Regex::new(r"(?:^|[^0-9a-zA-Z])(\d{2,3})(?:[^0-9a-zA-Z]|$)").unwrap();
+    for caps in re5.captures_iter(filename) {
+        if let Ok(num) = caps[1].parse::<i32>() {
+            if !(60..=190).contains(&num) {
+                continue;
+            }
+            // 숫자 뒤 텍스트 확인: 비-BPM 접미사 제외
+            let end_pos = caps.get(1).unwrap().end();
+            if end_pos < filename.len() {
+                let after = filename[end_pos..].to_lowercase();
+                if after.starts_with("bit")
+                    || after.starts_with("bar")
+                    || after.starts_with("hz")
+                    || after.starts_with("khz")
+                    || after.starts_with("db")
+                    || after.starts_with("ch")
+                    || after.starts_with("st")
+                    || after.starts_with("kbps")
+                {
+                    continue;
+                }
+            }
+            return Some(num);
         }
     }
     None
@@ -830,8 +875,80 @@ fn parse_key_from_filename(filename: &str) -> Option<String> {
     None
 }
 
-fn parse_sample_type(filename: &str, duration_ms: Option<i64>) -> String {
+/// 오디오 파일의 뒤쪽 무음 여부를 검사 (one-shot 판별용)
+/// 뒤쪽 30%가 대부분 무음이면 one-shot (긴 디케이/리버브 꼬리)
+fn has_trailing_silence(file_path: &str) -> bool {
+    let (samples, sample_rate) = match decode_audio_mono(file_path, Some(30.0)) {
+        Ok(r) => r,
+        Err(_) => return false,
+    };
+
+    let chunk_size = (sample_rate as usize) / 10; // 100ms 단위
+    if chunk_size == 0 {
+        return false;
+    }
+    let total_chunks = samples.len() / chunk_size;
+    if total_chunks < 5 {
+        return false;
+    }
+
+    // 각 청크의 RMS 에너지 계산
+    let energies: Vec<f64> = (0..total_chunks)
+        .map(|i| {
+            let start = i * chunk_size;
+            let end = (start + chunk_size).min(samples.len());
+            let rms: f64 = samples[start..end]
+                .iter()
+                .map(|s| (*s as f64).powi(2))
+                .sum::<f64>()
+                / (end - start) as f64;
+            rms.sqrt()
+        })
+        .collect();
+
+    let peak_energy = energies.iter().cloned().fold(0.0f64, f64::max);
+    if peak_energy <= 0.0 {
+        return false;
+    }
+
+    // 앞쪽 50%에서 피크 에너지 위치 확인
+    let half = total_chunks / 2;
+    let front_peak = energies[..half].iter().cloned().fold(0.0f64, f64::max);
+    let back_peak = energies[half..].iter().cloned().fold(0.0f64, f64::max);
+
+    // 앞쪽 피크가 뒤쪽보다 확실히 크면 one-shot 가능성
+    if front_peak <= 0.0 {
+        return false;
+    }
+
+    // 뒤쪽 30% 무음 체크
+    let tail_start = (total_chunks as f64 * 0.7) as usize;
+    let silence_threshold = peak_energy * 0.03; // 피크의 3% 이하 = 무음
+
+    let silent_tail_chunks = energies[tail_start..]
+        .iter()
+        .filter(|&&e| e < silence_threshold)
+        .count();
+    let tail_chunk_count = total_chunks - tail_start;
+
+    // 뒤쪽 30%의 60% 이상이 무음이면 → one-shot
+    let silence_ratio = silent_tail_chunks as f64 / tail_chunk_count as f64;
+    if silence_ratio > 0.6 {
+        return true;
+    }
+
+    // 또는: 뒤쪽 피크가 앞쪽 피크의 10% 미만이면 → one-shot (에너지 감쇠)
+    if back_peak < front_peak * 0.1 {
+        return true;
+    }
+
+    false
+}
+
+fn parse_sample_type(filename: &str, duration_ms: Option<i64>, file_path: Option<&str>) -> String {
     let lower = filename.to_lowercase();
+
+    // 1. 파일명 키워드 우선
     if lower.contains("loop") || lower.contains("_lp") {
         return "loop".to_string();
     }
@@ -840,12 +957,37 @@ fn parse_sample_type(filename: &str, duration_ms: Option<i64>) -> String {
         || lower.contains("one shot")
         || lower.contains("_hit")
         || lower.contains(" hit")
+        || lower.contains("stab")
+        || lower.contains("impact")
+        || lower.contains("riser")
+        || lower.contains("downlifter")
+        || lower.contains("fx")
+        || lower.contains("sfx")
+        || lower.contains("transition")
+        || lower.contains("fill")
     {
         return "oneshot".to_string();
     }
-    // duration 기반 추론: 1.5초 이하면 oneshot, 이상이면 loop
+
+    // 2. 짧은 샘플은 one-shot
+    if let Some(d) = duration_ms {
+        if d < 1500 {
+            return "oneshot".to_string();
+        }
+    }
+
+    // 3. 1.5초~20초 범위: 오디오 분석으로 뒤쪽 무음 체크
+    if let (Some(d), Some(path)) = (duration_ms, file_path) {
+        if d >= 1500 && d <= 20000 {
+            if has_trailing_silence(path) {
+                return "oneshot".to_string();
+            }
+        }
+    }
+
+    // 4. 20초 초과면 loop, 그 외 duration 기반
     match duration_ms {
-        Some(d) if d < 1500 => "oneshot".to_string(),
+        Some(d) if d > 20000 => "loop".to_string(),
         Some(_) => "loop".to_string(),
         None => "oneshot".to_string(),
     }
@@ -1239,6 +1381,9 @@ fn import_from_splice(app: tauri::AppHandle, state: State<AppState>) -> Result<I
                 s.file_hash.clone()
             };
 
+            // BPM: Splice DB 값은 그대로 사용, 없으면 파일명에서 파싱 시도
+            let bpm = s.bpm.or_else(|| parse_bpm_from_filename(&s.filename));
+
             tx.execute(
                 "INSERT OR IGNORE INTO samples
                  (local_path, filename, audio_key, bpm, chord_type, duration,
@@ -1248,7 +1393,7 @@ fn import_from_splice(app: tauri::AppHandle, state: State<AppState>) -> Result<I
                     new_path,
                     s.filename,
                     s.audio_key,
-                    s.bpm,
+                    bpm,
                     s.chord_type,
                     s.duration,
                     hash,
@@ -1576,10 +1721,10 @@ fn import_single_pack(
             .or_else(|| compute_duration_ms(&src_str));
 
         // BPM: 파일명 → 오디오 분석 순으로 시도
+        // (2초 이상 샘플이면 루프 여부와 관계없이 오디오 분석 시도)
         let bpm = parse_bpm_from_filename(&full_path_for_parse).or_else(|| {
-            let is_likely_loop = filename.to_lowercase().contains("loop")
-                || duration_ms.map(|d| d >= 1500).unwrap_or(false);
-            if is_likely_loop {
+            let long_enough = duration_ms.map(|d| d >= 2000).unwrap_or(false);
+            if long_enough {
                 let target = if dest_path.exists() { &dest_str } else { &src_str };
                 detect_bpm_from_audio(target)
             } else {
@@ -1588,7 +1733,8 @@ fn import_single_pack(
         });
 
         let audio_key = parse_key_from_filename(&full_path_for_parse);
-        let sample_type = parse_sample_type(&full_path_for_parse, duration_ms);
+        let audio_path = if dest_path.exists() { &dest_str } else { &src_str };
+        let sample_type = parse_sample_type(&full_path_for_parse, duration_ms, Some(audio_path));
         let tags_vec = parse_tags_from_path(&full_path_for_parse, &filename);
         let tags = if tags_vec.is_empty() {
             None
@@ -1965,6 +2111,59 @@ fn delete_pack(pack_uuid: String, state: State<AppState>) -> Result<usize, Strin
     Ok(count)
 }
 
+/// 모든 샘플 삭제 (DB 레코드 + 오디오 파일 일괄 삭제)
+#[tauri::command]
+fn delete_all_samples(state: State<AppState>) -> Result<usize, String> {
+    let db = state.db.lock().unwrap();
+
+    // 1. 모든 샘플의 파일 경로 조회
+    let paths: Vec<String> = {
+        let mut stmt = db
+            .prepare("SELECT local_path FROM samples")
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map([], |row| row.get::<_, String>(0))
+            .map_err(|e| e.to_string())?;
+        rows.filter_map(|r| r.ok()).collect()
+    };
+
+    let count = paths.len();
+
+    // 2. 실제 파일 삭제
+    for path in &paths {
+        let p = Path::new(path);
+        if p.exists() {
+            let _ = std::fs::remove_file(p);
+        }
+    }
+
+    // 3. DB 초기화
+    db.execute_batch("DELETE FROM samples; DELETE FROM packs;")
+        .map_err(|e| format!("데이터 삭제 실패: {}", e))?;
+
+    // 4. 빈 디렉토리 정리
+    if let Some(home) = dirs::home_dir() {
+        let slice_dir = home.join("Slice");
+        if slice_dir.exists() {
+            // 하위 빈 디렉토리 재귀 삭제 (slice.db가 있는 루트는 유지)
+            fn remove_empty_dirs(dir: &Path) {
+                if let Ok(entries) = std::fs::read_dir(dir) {
+                    for entry in entries.flatten() {
+                        let path = entry.path();
+                        if path.is_dir() {
+                            remove_empty_dirs(&path);
+                            let _ = std::fs::remove_dir(&path); // 비어있을 때만 성공
+                        }
+                    }
+                }
+            }
+            remove_empty_dirs(&slice_dir);
+        }
+    }
+
+    Ok(count)
+}
+
 // ── ZIP export helper ────────────────────────────────────────────────
 
 fn make_unique_name(base: &str, used: &mut HashSet<String>) -> String {
@@ -2172,6 +2371,7 @@ pub fn run() {
             update_pack,
             delete_sample,
             delete_pack,
+            delete_all_samples,
             get_drag_icon_path,
         ])
         .run(tauri::generate_context!())

@@ -12,6 +12,7 @@ import {
   Check,
   Loader2,
   RefreshCw,
+  Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Sample, ExportProgress, ImportProgress, ImportResult } from "@/types";
@@ -132,6 +133,26 @@ export default function SettingsPage() {
   const exportPct = exportProgress
     ? Math.round((exportProgress.current / exportProgress.total) * 100)
     : 0;
+
+  // ── Delete All state ─────────────────────────────────────────────
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteResult, setDeleteResult] = useState<number | null>(null);
+
+  const handleDeleteAll = useCallback(async () => {
+    setDeleting(true);
+    try {
+      const count = await invoke<number>("delete_all_samples");
+      setDeleteResult(count);
+      setDeleteConfirm(false);
+      refreshLibrary();
+      setTimeout(() => setDeleteResult(null), 3000);
+    } catch (err) {
+      console.error("delete all failed:", err);
+    } finally {
+      setDeleting(false);
+    }
+  }, [refreshLibrary]);
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
@@ -325,6 +346,82 @@ export default function SettingsPage() {
                       {exportProgress.current.toLocaleString()} /{" "}
                       {exportProgress.total.toLocaleString()} ({exportPct}%)
                     </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
+
+          {/* ── 모든 샘플 삭제 ──────────────────────────────────── */}
+          <section className="rounded-xl bg-card border border-destructive/20">
+            <div className="px-5 py-4">
+              <h2 className="text-sm font-semibold text-destructive">모든 샘플 삭제</h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                라이브러리의 모든 샘플과 팩을 삭제합니다 (오디오 파일 포함)
+              </p>
+            </div>
+            <div className="p-5 pt-0">
+              {deleteResult != null ? (
+                <div className="rounded-lg bg-emerald-500/10 px-4 py-2.5 text-sm text-emerald-400">
+                  {deleteResult.toLocaleString()}개 샘플이 삭제되었습니다
+                </div>
+              ) : !deleteConfirm ? (
+                <div className="flex items-center justify-between">
+                  <div className="text-sm text-muted-foreground">
+                    {packs.length}개 팩 · {totalSamples.toLocaleString()}개 샘플
+                  </div>
+                  <button
+                    onClick={() => setDeleteConfirm(true)}
+                    disabled={totalSamples === 0}
+                    className={cn(
+                      "flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all",
+                      totalSamples === 0
+                        ? "bg-muted text-muted-foreground cursor-not-allowed"
+                        : "bg-destructive/10 text-destructive hover:bg-destructive/20",
+                    )}
+                  >
+                    <Trash2 size={16} />
+                    전체 삭제
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                    정말 모든 샘플을 삭제하시겠습니까?<br />
+                    <span className="text-xs opacity-70">
+                      {totalSamples.toLocaleString()}개 샘플과 오디오 파일이 영구 삭제됩니다. 이 작업은 되돌릴 수 없습니다.
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-end gap-2">
+                    <button
+                      onClick={() => setDeleteConfirm(false)}
+                      disabled={deleting}
+                      className="rounded-lg px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      취소
+                    </button>
+                    <button
+                      onClick={handleDeleteAll}
+                      disabled={deleting}
+                      className={cn(
+                        "flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all",
+                        deleting
+                          ? "bg-muted text-muted-foreground cursor-not-allowed"
+                          : "bg-destructive text-destructive-foreground hover:bg-destructive/90",
+                      )}
+                    >
+                      {deleting ? (
+                        <>
+                          <Loader2 size={16} className="animate-spin" />
+                          삭제 중...
+                        </>
+                      ) : (
+                        <>
+                          <Trash2 size={16} />
+                          삭제 확인
+                        </>
+                      )}
+                    </button>
                   </div>
                 </div>
               )}
