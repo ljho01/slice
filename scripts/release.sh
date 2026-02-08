@@ -252,14 +252,14 @@ TAR_DIR=$(dirname "$APP_TAR")
 tar -czf "$APP_TAR" -C "$(dirname "$APP_BUNDLE")" "$APP_NAME"
 success "업데이터 번들 재생성 완료"
 
-# 업데이터 서명 재생성
-if [ -n "${TAURI_SIGNING_PRIVATE_KEY_PATH:-}" ]; then
+# 업데이터 서명 재생성 (TAURI_SIGNING_PRIVATE_KEY_PATH가 있으면 충돌하므로 unset)
+if [ -n "${TAURI_SIGNING_PRIVATE_KEY:-}" ]; then
   log "업데이터 서명 재생성 중..."
 
-  # tauri signer를 사용해서 서명 재생성
   cd "$ROOT_DIR/apps/desktop"
+  TAURI_SIGNING_PRIVATE_KEY_PATH="" \
   bunx tauri signer sign \
-    --private-key "$TAURI_SIGNING_PRIVATE_KEY_PATH" \
+    --private-key "$TAURI_SIGNING_PRIVATE_KEY" \
     --password "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD" \
     "$APP_TAR"
   cd "$ROOT_DIR"
