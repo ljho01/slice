@@ -7,6 +7,7 @@ import Player from "@/components/Player";
 import ImportScreen from "@/components/ImportScreen";
 import FolderTreeSelector from "@/components/FolderTreeSelector";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Toaster } from "sonner";
 
 /** macOS 트래픽 라이트 높이만큼의 투명 드래그 히트박스 */
 function DragRegion() {
@@ -45,6 +46,8 @@ export default function App() {
     stopChop,
     reversed,
     setReversedValue,
+    autoplay,
+    setAutoplay,
     onImportComplete,
     externalImporting,
     externalProgress,
@@ -109,6 +112,8 @@ export default function App() {
           onChopStop={stopChop}
           reversed={reversed}
           onReverse={setReversedValue}
+          autoplay={autoplay}
+          onAutoplayChange={setAutoplay}
         />
       )}
 
@@ -189,6 +194,14 @@ export default function App() {
           </div>
         </div>
       )}
+      <Toaster
+        position="bottom-center"
+        offset={140}
+        toastOptions={{
+          className: "!bg-card/90 !backdrop-blur-xl !border !text-foreground !text-xs !shadow-lg",
+          duration: 2000,
+        }}
+      />
     </div>
   );
 }

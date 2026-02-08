@@ -143,6 +143,8 @@ const en: Record<TranslationKey, string> = {
   "packs.sortNameDesc": "Name (Z-A)",
   "packs.sortSamplesDesc": "Most Samples",
   "packs.sortSamplesAsc": "Fewest Samples",
+  "packs.sortDateDesc": "Newest First",
+  "packs.sortDateAsc": "Oldest First",
   "packs.scanning": "Scanning library...",
   "packs.countLabel": "{count} packs",
   "packs.sampleCountLabel": "{count} samples",
@@ -164,6 +166,23 @@ const en: Record<TranslationKey, string> = {
   // PackDetail
   "packDetail.pack": "Pack",
   "packDetail.sampleCount": "{count} samples",
+
+  // Playlist
+  "playlist.title": "Playlists",
+  "playlist.new": "New Playlist",
+  "playlist.sampleCount": "{count} samples",
+  "playlist.addTo": "Add to Playlist",
+  "playlist.removeFrom": "Remove from Playlist",
+  "playlist.noPlaylists": "No playlists",
+  "playlist.createFirst": "Create New Playlist",
+  "playlist.rename": "Rename",
+  "playlist.color": "Background Color",
+  "playlist.delete": "Delete Playlist",
+  "playlist.deleteConfirmTitle": "Delete playlist?",
+  "playlist.deleteConfirmDesc": "The playlist \"{name}\" will be deleted. Sample files will not be removed.",
+  "playlist.addedToast": "Added to \"{name}\"",
+  "playlist.empty": "No samples",
+  "playlist.emptyDesc": "Add samples from the context menu",
 };
 
 export default en;

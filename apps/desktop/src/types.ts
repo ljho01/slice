@@ -4,6 +4,7 @@ export interface Pack {
   genre: string | null;
   cover_url: string | null;
   sample_count: number;
+  created_at: string | null;
 }
 
 export interface Sample {
@@ -20,6 +21,15 @@ export interface Sample {
   pack_uuid: string | null;
   pack_name: string | null;
   pack_genre: string | null;
+  created_at: string | null;
+}
+
+export interface Playlist {
+  id: number;
+  name: string;
+  color: string | null;
+  sample_count: number;
+  created_at: string | null;
 }
 
 export interface WaveformData {

@@ -33,21 +33,36 @@ interface PacksViewProps {
 }
 
 type ViewMode = "grid" | "list";
-type SortOption = "name-asc" | "name-desc" | "samples-desc" | "samples-asc";
+type SortOption = "name-asc" | "name-desc" | "samples-desc" | "samples-asc" | "date-desc" | "date-asc";
+
+function loadViewMode(): ViewMode {
+  try {
+    const v = localStorage.getItem("slice:packs-view-mode");
+    if (v === "grid" || v === "list") return v;
+  } catch { /* ignore */ }
+  return "grid";
+}
 
 export default function PacksView({ packs, loading, onSelectPack, onDeletePack, onEditPack, filter, onFilterChange, onImportExternal }: PacksViewProps) {
   const { t } = useI18n();
   const [selectedGenres, setSelectedGenres] = useState<Set<string>>(new Set());
   const [searchOpen, setSearchOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>("grid");
+  const [viewMode, setViewMode] = useState<ViewMode>(loadViewMode);
   const [sortBy, setSortBy] = useState<SortOption>("name-asc");
+
+  const handleSetViewMode = (mode: ViewMode) => {
+    setViewMode(mode);
+    try { localStorage.setItem("slice:packs-view-mode", mode); } catch { /* ignore */ }
+  };
 
   const sortLabels: Record<SortOption, string> = {
     "name-asc": t("packs.sortNameAsc"),
     "name-desc": t("packs.sortNameDesc"),
     "samples-desc": t("packs.sortSamplesDesc"),
     "samples-asc": t("packs.sortSamplesAsc"),
+    "date-desc": t("packs.sortDateDesc"),
+    "date-asc": t("packs.sortDateAsc"),
   };
 
   // 팩 편집 다이얼로그 상태
@@ -106,6 +121,12 @@ export default function PacksView({ packs, loading, onSelectPack, onDeletePack, 
         break;
       case "samples-asc":
         sorted.sort((a, b) => a.sample_count - b.sample_count);
+        break;
+      case "date-desc":
+        sorted.sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""));
+        break;
+      case "date-asc":
+        sorted.sort((a, b) => (a.created_at || "").localeCompare(b.created_at || ""));
         break;
     }
     return sorted;
@@ -232,7 +253,7 @@ export default function PacksView({ packs, loading, onSelectPack, onDeletePack, 
               "flex h-7 w-7 items-center justify-center rounded-full transition-colors cursor-pointer",
               viewMode === "grid" ? "bg-background text-foreground" : "text-muted-foreground hover:text-foreground"
             )}
-            onClick={() => setViewMode("grid")}
+            onClick={() => handleSetViewMode("grid")}
             title={t("packs.gridView")}
           >
             <Grid3x3 size={14} />
@@ -242,7 +263,7 @@ export default function PacksView({ packs, loading, onSelectPack, onDeletePack, 
               "flex h-7 w-7 items-center justify-center rounded-full transition-colors cursor-pointer",
               viewMode === "list" ? "bg-background text-foreground" : "text-muted-foreground hover:text-foreground"
             )}
-            onClick={() => setViewMode("list")}
+            onClick={() => handleSetViewMode("list")}
             title={t("packs.listView")}
           >
             <List size={14} />

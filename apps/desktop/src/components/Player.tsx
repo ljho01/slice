@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Pause, Play, Square, Music, Scissors, Undo2 } from "lucide-react";
+import { Pause, Play, Square, Music, Scissors, Undo2, SkipForward, Repeat1 } from "lucide-react";
 import Waveform from "@/components/Waveform";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/contexts/I18nContext";
@@ -31,6 +31,8 @@ interface PlayerProps {
   onChopStop: () => void;
   reversed: boolean;
   onReverse: (val: boolean) => void;
+  autoplay: "off" | "next" | "repeat";
+  onAutoplayChange: (val: "off" | "next" | "repeat") => void;
 }
 
 function fmt(sec: number) {
@@ -57,6 +59,8 @@ export default function Player({
   onChopStop,
   reversed,
   onReverse,
+  autoplay,
+  onAutoplayChange,
 }: PlayerProps) {
   // ── Space key handler ─────────────────────────────────────────────
   useEffect(() => {
@@ -145,7 +149,7 @@ export default function Player({
   return (
     <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 w-[min(560px,90vw)]">
       <div className="flex flex-col gap-2.5 rounded-2xl bg-card/80 backdrop-blur-xl shadow-xl border px-5 py-4">
-        {/* Top row: controls + info + time + transpose + chop */}
+        {/* Top row: controls + info + time + buttons */}
         <div className="flex items-center gap-3">
           {/* Controls */}
           <div className="flex items-center gap-1">
@@ -177,7 +181,7 @@ export default function Player({
             {fmt(progress)} / {fmt(duration)}
           </span>
 
-          {/* Transpose / Reverse / Chop */}
+          {/* Transpose / Reverse / Autoplay / Chop */}
           <div className="flex items-center gap-1 shrink-0">
             {/* Transpose */}
             <Popover>
@@ -258,6 +262,23 @@ export default function Player({
             >
               <Undo2 size={10} />
               REV
+            </button>
+
+            {/* Autoplay: off → next → repeat → off */}
+            <button
+              className={cn(
+                "flex items-center gap-1 rounded-full px-2 py-0.5 text-2xs font-medium transition-colors cursor-pointer",
+                autoplay !== "off"
+                  ? "bg-foreground text-background"
+                  : "bg-muted text-muted-foreground hover:text-foreground",
+              )}
+              onClick={() => {
+                const next = autoplay === "off" ? "next" : autoplay === "next" ? "repeat" : "off";
+                onAutoplayChange(next);
+              }}
+            >
+              {autoplay === "repeat" ? <Repeat1 size={10} /> : <SkipForward size={10} />}
+              {autoplay === "repeat" ? "LOOP" : "AUTO"}
             </button>
 
             {/* Chop */}

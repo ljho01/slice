@@ -12,7 +12,7 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useI18n } from "@/contexts/I18nContext";
-import type { Pack, Sample, LibraryData, LibraryStatus, WaveformData, ImportProgress, ImportResult, SampleFilterSearch, FolderNode } from "@/types";
+import type { Pack, Sample, Playlist, LibraryData, LibraryStatus, WaveformData, ImportProgress, ImportResult, SampleFilterSearch, FolderNode } from "@/types";
 
 type AppPhase = "loading" | "import" | "ready";
 
@@ -43,6 +43,10 @@ interface AppContextType {
   reversed: boolean;
   setReversedValue: (val: boolean) => void;
 
+  autoplay: "off" | "next" | "repeat";
+  setAutoplay: (val: "off" | "next" | "repeat") => void;
+  registerPlayNext: (cb: (() => void) | null) => void;
+
   onImportComplete: () => void;
 
   // 수정
@@ -63,6 +67,16 @@ interface AppContextType {
 
   lastSoundsSearch: SampleFilterSearch;
   setLastSoundsSearch: (search: SampleFilterSearch) => void;
+
+  // Playlist
+  playlists: Playlist[];
+  refreshPlaylists: () => void;
+  createPlaylist: (name: string, color?: string) => Promise<Playlist>;
+  renamePlaylist: (id: number, name: string) => Promise<void>;
+  updatePlaylistColor: (id: number, color: string | null) => Promise<void>;
+  deletePlaylist: (id: number) => Promise<void>;
+  addToPlaylist: (playlistId: number, sampleIds: number[]) => Promise<void>;
+  removeFromPlaylist: (playlistId: number, sampleIds: number[]) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
@@ -130,6 +144,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const reversedRef = useRef(false);
   const reversedBufferRef = useRef<AudioBuffer | null>(null);
   const isPlayingRef = useRef(false);
+
+  // ── Autoplay (off / next / repeat) ──────────────────────────────
+  const [autoplay, setAutoplayState] = useState<"off" | "next" | "repeat">("off");
+  const autoplayRef = useRef<"off" | "next" | "repeat">("off");
+  const playNextRef = useRef<(() => void) | null>(null);
+
+  const setAutoplay = useCallback((val: "off" | "next" | "repeat") => {
+    setAutoplayState(val);
+    autoplayRef.current = val;
+  }, []);
+
+  const registerPlayNext = useCallback((cb: (() => void) | null) => {
+    playNextRef.current = cb;
+  }, []);
 
   // Reversed normal playback (Web Audio API)
   const revSourceRef = useRef<AudioBufferSourceNode | null>(null);
@@ -204,6 +232,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
           setIsPlaying(false);
           isPlayingRef.current = false;
           revSourceRef.current = null;
+          if (autoplayRef.current === "repeat") {
+            setTimeout(() => startRevPlayback(0), 50);
+          } else if (autoplayRef.current === "next" && playNextRef.current) {
+            setTimeout(() => playNextRef.current?.(), 50);
+          }
           return;
         }
         setProgress(pos);
@@ -218,6 +251,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
           setIsPlaying(false);
           isPlayingRef.current = false;
           setProgress(0);
+          if (autoplayRef.current === "repeat") {
+            setTimeout(() => startRevPlayback(0), 50);
+          } else if (autoplayRef.current === "next" && playNextRef.current) {
+            setTimeout(() => playNextRef.current?.(), 50);
+          }
         }
       };
     },
@@ -261,8 +299,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const onEnded = useCallback(() => {
     stopProgressLoop();
     setIsPlaying(false);
+    isPlayingRef.current = false;
     setProgress(0);
-  }, [stopProgressLoop]);
+    if (autoplayRef.current === "repeat") {
+      // 같은 샘플 처음부터 다시 재생
+      setTimeout(() => {
+        if (audioRef.current) {
+          audioRef.current.currentTime = 0;
+          audioRef.current.play().catch(console.error);
+          startProgressLoop();
+          setIsPlaying(true);
+          isPlayingRef.current = true;
+        }
+      }, 50);
+    } else if (autoplayRef.current === "next" && playNextRef.current) {
+      setTimeout(() => playNextRef.current?.(), 50);
+    }
+  }, [stopProgressLoop, startProgressLoop]);
 
   const playSample = useCallback(
     (sample: Sample) => {
@@ -794,6 +847,50 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [refreshLibrary]);
 
+  // ── Playlists ─────────────────────────────────────────────────────
+  const [playlists, setPlaylists] = useState<Playlist[]>([]);
+
+  const refreshPlaylists = useCallback(() => {
+    invoke<Playlist[]>("get_playlists")
+      .then(setPlaylists)
+      .catch((err) => console.error("get_playlists failed:", err));
+  }, []);
+
+  useEffect(() => {
+    if (phase === "ready") refreshPlaylists();
+  }, [phase, refreshPlaylists]);
+
+  const createPlaylist = useCallback(async (name: string, color?: string) => {
+    const pl = await invoke<Playlist>("create_playlist", { name, color: color ?? null });
+    refreshPlaylists();
+    return pl;
+  }, [refreshPlaylists]);
+
+  const renamePlaylist = useCallback(async (id: number, name: string) => {
+    await invoke("rename_playlist", { playlistId: id, name });
+    refreshPlaylists();
+  }, [refreshPlaylists]);
+
+  const updatePlaylistColor = useCallback(async (id: number, color: string | null) => {
+    await invoke("update_playlist_color", { playlistId: id, color });
+    refreshPlaylists();
+  }, [refreshPlaylists]);
+
+  const deletePlaylist = useCallback(async (id: number) => {
+    await invoke("delete_playlist", { playlistId: id });
+    refreshPlaylists();
+  }, [refreshPlaylists]);
+
+  const addToPlaylist = useCallback(async (playlistId: number, sampleIds: number[]) => {
+    await invoke("add_to_playlist", { playlistId, sampleIds });
+    refreshPlaylists();
+  }, [refreshPlaylists]);
+
+  const removeFromPlaylist = useCallback(async (playlistId: number, sampleIds: number[]) => {
+    await invoke("remove_from_playlist", { playlistId, sampleIds });
+    refreshPlaylists();
+  }, [refreshPlaylists]);
+
   // ── Last Sounds Search (필터 유지) ──────────────────────────────
   const [lastSoundsSearch, setLastSoundsSearch] = useState<SampleFilterSearch>({});
 
@@ -821,6 +918,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         stopChop,
         reversed,
         setReversedValue,
+        autoplay,
+        setAutoplay,
+        registerPlayNext,
         onImportComplete,
         updatePack,
         deleteSample,
@@ -834,6 +934,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         refreshLibrary,
         lastSoundsSearch,
         setLastSoundsSearch,
+        playlists,
+        refreshPlaylists,
+        createPlaylist,
+        renamePlaylist,
+        updatePlaylistColor,
+        deletePlaylist,
+        addToPlaylist,
+        removeFromPlaylist,
       }}
     >
       {children}

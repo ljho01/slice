@@ -141,6 +141,8 @@ const ko = {
   "packs.sortNameDesc": "이름 (Z-A)",
   "packs.sortSamplesDesc": "샘플 많은 순",
   "packs.sortSamplesAsc": "샘플 적은 순",
+  "packs.sortDateDesc": "최근 추가순",
+  "packs.sortDateAsc": "오래된 순",
   "packs.scanning": "라이브러리 스캔 중...",
   "packs.countLabel": "{count}개 팩",
   "packs.sampleCountLabel": "{count}개 샘플",
@@ -162,6 +164,23 @@ const ko = {
   // PackDetail
   "packDetail.pack": "팩",
   "packDetail.sampleCount": "{count} 샘플",
+
+  // Playlist
+  "playlist.title": "플레이리스트",
+  "playlist.new": "새 플레이리스트",
+  "playlist.sampleCount": "{count} 샘플",
+  "playlist.addTo": "플레이리스트에 추가",
+  "playlist.removeFrom": "플레이리스트에서 제거",
+  "playlist.noPlaylists": "플레이리스트가 없습니다",
+  "playlist.createFirst": "새 플레이리스트 만들기",
+  "playlist.rename": "이름 변경",
+  "playlist.color": "배경색",
+  "playlist.delete": "플레이리스트 삭제",
+  "playlist.deleteConfirmTitle": "플레이리스트를 삭제하시겠습니까?",
+  "playlist.deleteConfirmDesc": "\"{name}\" 플레이리스트가 삭제됩니다. 샘플 파일은 삭제되지 않습니다.",
+  "playlist.addedToast": "\"{name}\"에 추가됨",
+  "playlist.empty": "샘플이 없습니다",
+  "playlist.emptyDesc": "컨텍스트 메뉴에서 샘플을 추가해보세요",
 } as const;
 
 export type TranslationKey = keyof typeof ko;

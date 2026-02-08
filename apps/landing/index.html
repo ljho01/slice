@@ -9,7 +9,7 @@
     <!-- Primary Meta Tags -->
     <title>Slice - Minimal Splice Sample Browser</title>
     <meta name="title" content="Slice - Minimal Splice Sample Browser" />
-    <meta name="description" content="A minimal local browser for your Splice library. Experience lightning-fast browsing, instant waveforms, and smart filtering. Available for macOS." />
+    <meta name="description" content="A minimal local browser for your Splice library. Experience lightning-fast browsing, instant waveforms, and smart filtering. Available for macOS and Windows." />
     <meta name="keywords" content="Splice, Sample Browser, Audio Samples, Local Manager, macOS App, Music Production, DAW, Free, Slice" />
     <meta name="author" content="Slice" />
     <meta name="theme-color" content="#050505" />
@@ -61,7 +61,7 @@
         <div
           class="inline-flex items-center gap-2 px-2.5 py-1 rounded-full border border-white/5 bg-white/[0.02] text-[10px] font-medium text-zinc-400 uppercase tracking-widest">
           <span class="w-1 h-1 rounded-full bg-emerald-500/80"></span>
-          v0.1.0 Beta
+          v0.2.0 Beta
         </div>
 
         <h1 class="text-3xl md:text-5xl font-medium tracking-[-0.03em] leading-[1.1] text-white">
@@ -75,21 +75,33 @@
         </p>
       </div>
 
-      <div class="flex flex-col sm:flex-row items-center gap-4 pt-2">
-        <a id="download-btn" href="https://github.com/ljho01/slice/releases/latest"
-          class="group flex items-center gap-2 px-5 py-2.5 text-sm font-medium rounded-lg bg-zinc-100 text-black hover:bg-white transition-all shadow-[0_0_20px_-5px_rgba(255,255,255,0.1)] cursor-pointer no-underline">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-            <polyline points="7 10 12 15 17 10" />
-            <line x1="12" x2="12" y1="15" y2="3" />
-          </svg>
-          Download for macOS
-        </a>
-        <div class="flex items-center gap-3 px-2 text-[11px] text-zinc-600 font-mono">
+      <div class="flex flex-col items-center gap-4 pt-2">
+        <div id="download-buttons" class="flex flex-col sm:flex-row items-center gap-3">
+          <!-- macOS (기본: primary) -->
+          <a id="download-mac" href="https://github.com/ljho01/slice/releases/latest"
+            class="dl-btn group flex items-center gap-2 px-5 py-2.5 text-sm font-medium rounded-lg transition-all cursor-pointer no-underline"
+            data-os="mac">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4">
+              <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
+            </svg>
+            Download for macOS
+          </a>
+          <!-- Windows -->
+          <a id="download-win" href="https://github.com/ljho01/slice/releases/latest"
+            class="dl-btn group flex items-center gap-2 px-5 py-2.5 text-sm font-medium rounded-lg transition-all cursor-pointer no-underline"
+            data-os="win">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" class="w-3.5 h-3.5">
+              <path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801"/>
+            </svg>
+            Download for Windows
+          </a>
+        </div>
+        <div id="dl-info" class="flex items-center gap-3 px-2 text-[11px] text-zinc-600 font-mono">
           <span>macOS 11.0+</span>
           <span class="w-px h-2.5 bg-zinc-800"></span>
           <span>Apple Silicon Ready</span>
+          <span class="w-px h-2.5 bg-zinc-800"></span>
+          <span>Windows 10+</span>
         </div>
       </div>
     </div>
@@ -201,15 +213,43 @@
     </footer>
   </div>
   <script>
-    fetch('https://api.github.com/repos/ljho01/slice/releases/latest')
-      .then(r => r.json())
-      .then(release => {
-        const dmg = release.assets?.find(a => a.name.endsWith('.dmg'));
-        if (dmg) {
-          document.getElementById('download-btn').href = dmg.browser_download_url;
-        }
-      })
-      .catch(() => {});
+    (function() {
+      // OS 감지
+      var ua = navigator.userAgent || navigator.platform || '';
+      var isWin = /Win/.test(ua);
+      var isMac = /Mac/.test(ua);
+      var os = isWin ? 'win' : 'mac'; // 기본값 mac
+
+      // 버튼 스타일 적용: 감지된 OS → primary(밝은), 나머지 → secondary(어두운)
+      var PRIMARY = 'bg-zinc-100 text-black hover:bg-white shadow-[0_0_20px_-5px_rgba(255,255,255,0.1)]';
+      var SECONDARY = 'bg-zinc-800 text-zinc-200 hover:bg-zinc-700 border border-white/10';
+
+      var macBtn = document.getElementById('download-mac');
+      var winBtn = document.getElementById('download-win');
+      var container = document.getElementById('download-buttons');
+
+      if (os === 'win') {
+        winBtn.className = winBtn.className + ' ' + PRIMARY;
+        macBtn.className = macBtn.className + ' ' + SECONDARY;
+        // Windows 버튼을 앞으로
+        container.insertBefore(winBtn, macBtn);
+      } else {
+        macBtn.className = macBtn.className + ' ' + PRIMARY;
+        winBtn.className = winBtn.className + ' ' + SECONDARY;
+      }
+
+      // GitHub Release에서 다운로드 링크 가져오기
+      fetch('https://api.github.com/repos/ljho01/slice/releases/latest')
+        .then(function(r) { return r.json(); })
+        .then(function(release) {
+          var assets = release.assets || [];
+          var dmg = assets.find(function(a) { return a.name.endsWith('.dmg'); });
+          var exe = assets.find(function(a) { return a.name.endsWith('.exe'); });
+          if (dmg) macBtn.href = dmg.browser_download_url;
+          if (exe) winBtn.href = exe.browser_download_url;
+        })
+        .catch(function() {});
+    })();
   </script>
 </body>
 

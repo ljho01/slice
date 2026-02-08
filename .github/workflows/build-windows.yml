@@ -1,0 +1,100 @@
+name: Build Windows
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri -> target
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Build Tauri (Windows)
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: bun run tauri build --bundles nsis
+        working-directory: apps/desktop
+
+      - name: Upload Windows artifacts to release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          BUNDLE_DIR="apps/desktop/src-tauri/target/release/bundle/nsis"
+
+          EXE=$(find "$BUNDLE_DIR" -name "*.exe" | head -1)
+          NSIS_ZIP=$(find "$BUNDLE_DIR" -name "*.nsis.zip" ! -name "*.sig" | head -1)
+          NSIS_SIG=$(find "$BUNDLE_DIR" -name "*.nsis.zip.sig" | head -1)
+
+          echo "EXE: $EXE"
+          echo "ZIP: $NSIS_ZIP"
+          echo "SIG: $NSIS_SIG"
+
+          gh release upload "$TAG" "$EXE" "$NSIS_ZIP" "$NSIS_SIG" --clobber
+
+      - name: Update latest.json with Windows platform
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          BUNDLE_DIR="apps/desktop/src-tauri/target/release/bundle/nsis"
+
+          # 기존 latest.json 다운로드 (macOS 정보 포함)
+          gh release download "$TAG" --pattern "latest.json" --dir /tmp --clobber
+
+          # Windows 서명 + 파일명
+          NSIS_SIG_FILE=$(find "$BUNDLE_DIR" -name "*.nsis.zip.sig" | head -1)
+          NSIS_ZIP_FILE=$(find "$BUNDLE_DIR" -name "*.nsis.zip" ! -name "*.sig" | head -1)
+
+          SIG=$(cat "$NSIS_SIG_FILE")
+          NSIS_NAME=$(basename "$NSIS_ZIP_FILE")
+          URL="https://github.com/${{ github.repository }}/releases/download/$TAG/$NSIS_NAME"
+
+          # Windows 플랫폼 추가
+          jq --arg sig "$SIG" --arg url "$URL" \
+            '.platforms["windows-x86_64"] = {"signature": $sig, "url": $url}' \
+            /tmp/latest.json > /tmp/latest_updated.json
+
+          mv /tmp/latest_updated.json /tmp/latest.json
+
+          # 재업로드
+          gh release upload "$TAG" /tmp/latest.json --clobber
+
+          echo "✅ latest.json updated:"
+          cat /tmp/latest.json
+
+      - name: Update release notes
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          EXE_NAME=$(basename "$(find apps/desktop/src-tauri/target/release/bundle/nsis -name '*.exe' | head -1)")
+
+          CURRENT_BODY=$(gh release view "$TAG" --json body -q '.body')
+
+          gh release edit "$TAG" --notes "${CURRENT_BODY}
+          - **Windows**: \`${EXE_NAME}\`
+
+          > Windows 빌드는 GitHub Actions에서 자동 생성되었습니다."

@@ -24,6 +24,9 @@ import {
   ContextMenuItem,
   ContextMenuSeparator,
   ContextMenuTrigger,
+  ContextMenuSub,
+  ContextMenuSubTrigger,
+  ContextMenuSubContent,
 } from "@/components/ui/context-menu";
 import {
   ArrowDown,
@@ -33,9 +36,11 @@ import {
   ChevronDown,
   ChevronRight,
   Download,
+  ListMusic,
   Loader2,
   Pause,
   Pencil,
+  Plus,
   Search,
   Shuffle,
   Tag,
@@ -45,6 +50,7 @@ import {
 import SampleEditDialog from "@/components/SampleEditDialog";
 import { startDrag } from "@crabnebula/tauri-plugin-drag";
 import { useI18n } from "@/contexts/I18nContext";
+import { useApp } from "@/contexts/AppContext";
 import type { Sample, WaveformData, ExportProgress, SampleFilterSearch, SampleType, SortBy, SortDir } from "@/types";
 
 /* ── String → soft pastel color (deterministic) ── */
@@ -77,6 +83,16 @@ function formatDuration(ms: number | null): string | null {
   const m = Math.floor(totalSecs / 60);
   const s = totalSecs % 60;
   return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+}
+
+function formatDate(dateStr: string | null): string | null {
+  if (!dateStr) return null;
+  const d = new Date(dateStr + "Z"); // SQLite datetime은 UTC
+  if (isNaN(d.getTime())) return null;
+  const y = d.getFullYear().toString().slice(2);
+  const m = (d.getMonth() + 1).toString().padStart(2, "0");
+  const day = d.getDate().toString().padStart(2, "0");
+  return `${y}.${m}.${day}`;
 }
 
 /* ── Instrument keywords ── */
@@ -231,7 +247,11 @@ function sortSamples(samples: Sample[], sortBy: SortBy, sortDir: SortDir): Sampl
       });
       break;
     case "recent":
-      sorted.sort((a, b) => (b.id - a.id) * dir);
+      sorted.sort((a, b) => {
+        const aDate = a.created_at || "";
+        const bDate = b.created_at || "";
+        return (bDate.localeCompare(aDate)) * dir;
+      });
       break;
     case "filename":
     default:
@@ -419,13 +439,16 @@ interface Props {
   onNavigateToPack?: (packUuid: string) => void;
   filters: SampleFilterSearch;
   onFiltersChange: (updates: Partial<SampleFilterSearch> | null) => void;
+  deleteLabel?: string;
+  titleExtra?: React.ReactNode;
 }
 
 export default function SampleBrowser({
   samples, loading, title, subtitle,
   showBack, onBack, currentSample, isPlaying, onPlaySample, onDeleteSample, onEditSample, onNavigateToPack,
-  filters, onFiltersChange,
+  filters, onFiltersChange, deleteLabel, titleExtra,
 }: Props) {
+  const { registerPlayNext } = useApp();
   const [editingSample, setEditingSample] = useState<Sample | null>(null);
   const [editOpen, setEditOpen] = useState(false);
 
@@ -474,13 +497,15 @@ export default function SampleBrowser({
     return result;
   }, [filtered, sortBy, sortDir, shuffleSeed]);
 
-  // 무한 스크롤: 100개씩 로드
-  const [displayCount, setDisplayCount] = useState(100);
-  const displayed = useMemo(() => sorted.slice(0, displayCount), [sorted, displayCount]);
+  // 페이지네이션: 50개 단위
+  const PAGE_SIZE = 50;
+  const [page, setPage] = useState(0);
+  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+  const displayed = useMemo(() => sorted.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE), [sorted, page]);
 
-  // 필터가 변경되면 displayCount 리셋
+  // 필터가 변경되면 페이지 리셋
   useEffect(() => {
-    setDisplayCount(100);
+    setPage(0);
   }, [filtered, sortBy, shuffleSeed]);
 
   // 필터된 결과에서 존재하는 태그만 추출 (+ 현재 exclude된 태그는 유지)
@@ -644,21 +669,75 @@ export default function SampleBrowser({
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
       e.preventDefault();
-      if (sorted.length === 0) return;
+      if (displayed.length === 0) return;
+
+      const pageStart = page * PAGE_SIZE;
       const curIdx = currentSample
-        ? sorted.findIndex((s) => s.local_path === currentSample.local_path)
+        ? displayed.findIndex((s) => s.local_path === currentSample.local_path)
         : -1;
-      let nextIdx: number;
+
       if (e.key === "ArrowDown") {
-        nextIdx = curIdx < 0 ? 0 : Math.min(curIdx + 1, sorted.length - 1);
+        if (curIdx < 0) {
+          onPlaySample(displayed[0]);
+        } else if (curIdx >= displayed.length - 1) {
+          // 현재 페이지 마지막 항목 → 다음 페이지로
+          if (page < totalPages - 1) {
+            setPage((p) => p + 1);
+            // 다음 페이지 첫 항목 재생
+            const nextPageFirst = sorted[pageStart + PAGE_SIZE];
+            if (nextPageFirst) onPlaySample(nextPageFirst);
+          }
+        } else {
+          onPlaySample(displayed[curIdx + 1]);
+        }
       } else {
-        nextIdx = curIdx <= 0 ? 0 : curIdx - 1;
+        if (curIdx <= 0) {
+          // 현재 페이지 첫 항목 → 이전 페이지로
+          if (page > 0) {
+            setPage((p) => p - 1);
+            const prevPageLast = sorted[pageStart - 1];
+            if (prevPageLast) onPlaySample(prevPageLast);
+          }
+        } else {
+          onPlaySample(displayed[curIdx - 1]);
+        }
       }
-      onPlaySample(sorted[nextIdx]);
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [sorted, currentSample, onPlaySample]);
+  }, [displayed, sorted, currentSample, onPlaySample, page, totalPages]);
+
+  // ── Autoplay: registerPlayNext 콜백 등록 ──
+  const sortedRef = useRef(sorted);
+  sortedRef.current = sorted;
+  const playSampleRef = useRef(onPlaySample);
+  playSampleRef.current = onPlaySample;
+  const currentSampleRef = useRef(currentSample);
+  currentSampleRef.current = currentSample;
+  const pageRef = useRef(page);
+  pageRef.current = page;
+
+  useEffect(() => {
+    registerPlayNext(() => {
+      const list = sortedRef.current;
+      const cur = currentSampleRef.current;
+      if (!cur || list.length === 0) return;
+
+      const idx = list.findIndex((s) => s.local_path === cur.local_path);
+      if (idx < 0 || idx >= list.length - 1) return;
+
+      const nextSample = list[idx + 1];
+
+      // 페이지 경계 처리
+      const nextPage = Math.floor((idx + 1) / PAGE_SIZE);
+      if (nextPage !== pageRef.current) {
+        setPage(nextPage);
+      }
+
+      playSampleRef.current(nextSample);
+    });
+    return () => registerPlayNext(null);
+  }, [registerPlayNext]);
 
   if (loading) {
     return (
@@ -686,7 +765,10 @@ export default function SampleBrowser({
             </Button>
           )}
           <div>
-            <h1 className="text-xl font-bold tracking-tight">{title}</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-bold tracking-tight">{title}</h1>
+              {titleExtra}
+            </div>
             <p className="mt-0.5 text-xs text-muted-foreground">
               {subtitle || t("browser.sampleCount", { filtered: sorted.length.toLocaleString(), total: samples.length.toLocaleString() })}
             </p>
@@ -1070,8 +1152,6 @@ export default function SampleBrowser({
       <VirtualSampleList
         filtered={sorted}
         displayed={displayed}
-        hasMore={displayCount < sorted.length}
-        onLoadMore={() => setDisplayCount((c) => c + 100)}
         currentSample={currentSample}
         isPlaying={isPlaying}
         onPlaySample={onPlaySample}
@@ -1082,6 +1162,10 @@ export default function SampleBrowser({
         onGenreClick={toggleGenre}
         onTagClick={cycleTag}
         onNavigateToPack={onNavigateToPack}
+        deleteLabel={deleteLabel}
+        page={page}
+        totalPages={totalPages}
+        onPageChange={setPage}
       />
 
       {/* 샘플 편집 다이얼로그 */}
@@ -1095,14 +1179,60 @@ export default function SampleBrowser({
   );
 }
 
+/* ── Playlist sub-menu for context menu ── */
+function PlaylistSubMenu({ sampleId }: { sampleId: number }) {
+  const { playlists, addToPlaylist, createPlaylist } = useApp();
+  const { t } = useI18n();
+
+  const handleAddToPlaylist = useCallback(
+    async (playlistId: number) => {
+      try {
+        await addToPlaylist(playlistId, [sampleId]);
+      } catch (err) {
+        console.error("add_to_playlist failed:", err);
+      }
+    },
+    [addToPlaylist, sampleId],
+  );
+
+  const handleCreateAndAdd = useCallback(async () => {
+    try {
+      const pl = await createPlaylist(t("playlist.new"));
+      await addToPlaylist(pl.id, [sampleId]);
+    } catch (err) {
+      console.error("create_playlist failed:", err);
+    }
+  }, [createPlaylist, addToPlaylist, sampleId, t]);
+
+  return (
+    <ContextMenuSub>
+      <ContextMenuSubTrigger>
+        <ListMusic size={14} />
+        {t("playlist.addTo")}
+      </ContextMenuSubTrigger>
+      <ContextMenuSubContent>
+        {playlists.map((pl) => (
+          <ContextMenuItem key={pl.id} onClick={() => handleAddToPlaylist(pl.id)}>
+            {pl.name}
+            <span className="ml-auto text-xs text-muted-foreground">{pl.sample_count}</span>
+          </ContextMenuItem>
+        ))}
+        {playlists.length > 0 && <ContextMenuSeparator />}
+        <ContextMenuItem onClick={handleCreateAndAdd}>
+          <Plus size={14} />
+          {t("playlist.createFirst")}
+        </ContextMenuItem>
+      </ContextMenuSubContent>
+    </ContextMenuSub>
+  );
+}
+
 /* ── Virtualized sample list ── */
 const ROW_HEIGHT = 48;
 
 function VirtualSampleList({
   filtered,
   displayed,
-  hasMore,
-  onLoadMore,
   currentSample,
   isPlaying,
   onPlaySample,
@@ -1113,11 +1243,13 @@ function VirtualSampleList({
   onGenreClick,
   onTagClick,
   onNavigateToPack,
+  deleteLabel,
+  page,
+  totalPages,
+  onPageChange,
 }: {
   filtered: Sample[];
   displayed: Sample[];
-  hasMore: boolean;
-  onLoadMore: () => void;
   currentSample: Sample | null;
   isPlaying: boolean;
   onPlaySample: (s: Sample) => void;
@@ -1128,6 +1260,10 @@ function VirtualSampleList({
   onGenreClick: (genre: string) => void;
   onTagClick: (tag: string) => void;
   onNavigateToPack?: (packUuid: string) => void;
+  deleteLabel?: string;
+  page: number;
+  totalPages: number;
+  onPageChange: (page: number) => void;
 }) {
   const { t } = useI18n();
   const parentRef = useRef<HTMLDivElement>(null);
@@ -1139,22 +1275,10 @@ function VirtualSampleList({
     overscan: 15,
   });
 
-  // 무한 스크롤: 하단 근처에 도달하면 더 로드
+  // 페이지 변경 시 스크롤 맨 위로
   useEffect(() => {
-    const parent = parentRef.current;
-    if (!parent || !hasMore) return;
-
-    const handleScroll = () => {
-      const { scrollTop, scrollHeight, clientHeight } = parent;
-      const threshold = 300; // 하단 300px 전에 로드
-      if (scrollTop + clientHeight >= scrollHeight - threshold) {
-        onLoadMore();
-      }
-    };
-
-    parent.addEventListener("scroll", handleScroll);
-    return () => parent.removeEventListener("scroll", handleScroll);
-  }, [hasMore, onLoadMore]);
+    parentRef.current?.scrollTo({ top: 0 });
+  }, [page]);
 
   if (filtered.length === 0) {
     return (
@@ -1167,14 +1291,16 @@ function VirtualSampleList({
   }
 
   return (
-    <div ref={parentRef} className="flex-1 overflow-y-auto overscroll-contain p-6">
-      <div className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
-        {virtualizer.getVirtualItems().map((vItem) => {
+    <div className="relative flex-1 overflow-hidden">
+      <div ref={parentRef} className="h-full overflow-y-auto overscroll-contain p-6">
+        <div className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
+          {virtualizer.getVirtualItems().map((vItem) => {
           const sample = displayed[vItem.index];
           const isCurrent = currentSample?.local_path === sample.local_path;
           const isActive = isCurrent && isPlaying;
           const keyStr = formatKey(sample.audio_key, sample.chord_type);
           const durStr = formatDuration(sample.duration);
+          const dateStr = formatDate(sample.created_at);
 
           const packInitial = (sample.pack_name || "?").charAt(0).toUpperCase();
           const genre = sample.genre || sample.pack_genre;
@@ -1182,12 +1308,17 @@ function VirtualSampleList({
 
           const rowContent = (
             <div
+              draggable
               className={cn(
                 "group/row absolute left-0 w-full flex cursor-pointer rounded-xl items-center px-2 transition-colors gap-3",
                 isActive ? "bg-muted" : "hover:bg-secondary"
               )}
               style={{ top: vItem.start, height: ROW_HEIGHT }}
               onClick={() => onPlaySample(sample)}
+              onDragStart={(e) => {
+                e.dataTransfer.setData("application/x-slice-sample-id", String(sample.id));
+                e.dataTransfer.effectAllowed = "copy";
+              }}
               onMouseDown={(e) => {
                 if (e.button !== 0) return;
                 const startX = e.clientX;
@@ -1206,12 +1337,15 @@ function VirtualSampleList({
                   }
                 };
                 const onUp = () => cleanup();
+                const onDrag = () => { fired = true; cleanup(); };
                 const cleanup = () => {
                   window.removeEventListener("mousemove", onMove);
                   window.removeEventListener("mouseup", onUp);
+                  window.removeEventListener("dragstart", onDrag);
                 };
                 window.addEventListener("mousemove", onMove);
                 window.addEventListener("mouseup", onUp);
+                window.addEventListener("dragstart", onDrag);
               }}
             >
               {/* Thumbnail — click → navigate to pack */}
@@ -1240,7 +1374,7 @@ function VirtualSampleList({
               </div>
 
               {/* Title + tags — fixed width, truncated */}
-              <div className="w-128 shrink-0 min-w-0">
+              <div className="w-96 shrink-0 min-w-0">
                 <p className={cn("truncate text-xs font-medium leading-tight", isActive && "text-foreground")}>
                   {sample.filename}
                 </p>
@@ -1268,13 +1402,16 @@ function VirtualSampleList({
                 </div>
               </div>
 
-              {/* Waveform + Duration group */}
+              {/* Waveform + Duration + Date group */}
               <div className="shrink-0 hidden md:flex items-center gap-4">
-                <div className="w-24 shrink-0">
+                <div className="w-24 shrink-0 hidden lg:block">
                   <MiniWaveform path={sample.local_path} isActive={isActive} />
                 </div>
                 <span className="w-12 shrink-0 text-right text-xs tabular-nums text-muted-foreground/70">
                   {durStr || "-"}
+                </span>
+                <span className="w-16 shrink-0 text-right text-xs tabular-nums text-muted-foreground/40">
+                  {dateStr || "-"}
                 </span>
               </div>
 
@@ -1300,9 +1437,7 @@ function VirtualSampleList({
             </div>
           );
 
-          const hasContextMenu = onDeleteSample || onEditSample;
-
-          return hasContextMenu ? (
+          return (
             <ContextMenu key={sample.local_path}>
               <ContextMenuTrigger asChild>
                 {rowContent}
@@ -1316,23 +1451,48 @@ function VirtualSampleList({
                     {t("browser.editProperties")}
                   </ContextMenuItem>
                 )}
-                {onEditSample && onDeleteSample && <ContextMenuSeparator />}
+                <PlaylistSubMenu sampleId={sample.id} />
+                {onDeleteSample && <ContextMenuSeparator />}
                 {onDeleteSample && (
                   <ContextMenuItem
                     variant="destructive"
                     onClick={() => onDeleteSample(sample)}
                   >
                     <Trash2 size={14} />
-                    {t("browser.deleteSample")}
+                    {deleteLabel || t("browser.deleteSample")}
                   </ContextMenuItem>
                 )}
               </ContextMenuContent>
             </ContextMenu>
-          ) : (
-            <React.Fragment key={sample.local_path}>{rowContent}</React.Fragment>
           );
-        })}
+          })}
+        </div>
       </div>
+
+      {/* 페이지 컨트롤 — 플로팅 */}
+      {totalPages > 1 && (
+        <div className="absolute bottom-4 right-4 z-10 flex items-center gap-2 rounded-xl border border-border/50 bg-popover/80 backdrop-blur-lg px-3 py-1.5 shadow-lg">
+          <span className="text-xs tabular-nums text-muted-foreground">
+            {page + 1} / {totalPages}
+          </span>
+          <div className="flex items-center gap-0.5">
+            <button
+              disabled={page <= 0}
+              onClick={() => onPageChange(page - 1)}
+              className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
+            >
+              <ArrowUp size={14} />
+            </button>
+            <button
+              disabled={page >= totalPages - 1}
+              onClick={() => onPageChange(page + 1)}
+              className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
+            >
+              <ArrowDown size={14} />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

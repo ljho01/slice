@@ -31,6 +31,7 @@ pub struct Pack {
     pub genre: Option<String>,
     pub cover_url: Option<String>,
     pub sample_count: usize,
+    pub created_at: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -48,6 +49,16 @@ pub struct Sample {
     pub pack_uuid: Option<String>,
     pub pack_name: Option<String>,
     pub pack_genre: Option<String>,
+    pub created_at: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Playlist {
+    pub id: i64,
+    pub name: String,
+    pub color: Option<String>,
+    pub sample_count: usize,
+    pub created_at: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -270,6 +281,36 @@ fn init_db(db: &Connection) -> Result<(), String> {
         CREATE INDEX IF NOT EXISTS idx_samples_local_path ON samples (local_path);",
     )
     .map_err(|e| format!("DB 초기화 실패: {}", e))?;
+
+    // Migration: created_at 컬럼 추가 (기존 DB 호환)
+    let _ = db.execute("ALTER TABLE samples ADD COLUMN created_at TEXT", []);
+    let _ = db.execute("ALTER TABLE packs ADD COLUMN created_at TEXT", []);
+
+    // Backfill: created_at이 NULL인 행에 현재 시간 채우기
+    let _ = db.execute("UPDATE samples SET created_at = datetime('now') WHERE created_at IS NULL", []);
+    let _ = db.execute("UPDATE packs SET created_at = datetime('now') WHERE created_at IS NULL", []);
+
+    // Playlist 테이블
+    db.execute_batch(
+        "CREATE TABLE IF NOT EXISTS playlists (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            created_at TEXT DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS playlist_samples (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            playlist_id INTEGER NOT NULL,
+            sample_id INTEGER NOT NULL,
+            added_at TEXT DEFAULT (datetime('now')),
+            FOREIGN KEY (playlist_id) REFERENCES playlists(id) ON DELETE CASCADE,
+            FOREIGN KEY (sample_id) REFERENCES samples(id) ON DELETE CASCADE,
+            UNIQUE(playlist_id, sample_id)
+        );",
+    )
+    .map_err(|e| format!("Playlist 테이블 초기화 실패: {}", e))?;
+
+    // Migration: playlists.color 컬럼 추가
+    let _ = db.execute("ALTER TABLE playlists ADD COLUMN color TEXT", []);
 
     // Migration: waveform_colors 컬럼 추가 (기존 DB 호환)
     let _ = db.execute("ALTER TABLE samples ADD COLUMN waveform_colors TEXT", []);
@@ -1323,8 +1364,8 @@ fn import_from_splice(app: tauri::AppHandle, state: State<AppState>) -> Result<I
         // Insert packs
         for p in &splice_packs {
             tx.execute(
-                "INSERT OR IGNORE INTO packs (uuid, name, description, cover_url, genre, permalink)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                "INSERT OR IGNORE INTO packs (uuid, name, description, cover_url, genre, permalink, created_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, datetime('now'))",
                 params![p.uuid, p.name, p.description, p.cover_url, p.genre, p.permalink],
             )
             .map_err(|e| e.to_string())?;
@@ -1387,8 +1428,8 @@ fn import_from_splice(app: tauri::AppHandle, state: State<AppState>) -> Result<I
             tx.execute(
                 "INSERT OR IGNORE INTO samples
                  (local_path, filename, audio_key, bpm, chord_type, duration,
-                  file_hash, genre, sample_type, tags, pack_uuid)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                  file_hash, genre, sample_type, tags, pack_uuid, created_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, datetime('now'))",
                 params![
                     new_path,
                     s.filename,
@@ -1445,7 +1486,7 @@ fn scan_library(state: State<AppState>) -> Result<LibraryData, String> {
     let db = state.db.lock().unwrap();
     let mut stmt = db
         .prepare(
-            "SELECT p.uuid, p.name, p.genre, p.cover_url, COUNT(s.id) as sample_count
+            "SELECT p.uuid, p.name, p.genre, p.cover_url, COUNT(s.id) as sample_count, p.created_at
              FROM packs p
              JOIN samples s ON s.pack_uuid = p.uuid
              GROUP BY p.uuid
@@ -1461,6 +1502,7 @@ fn scan_library(state: State<AppState>) -> Result<LibraryData, String> {
                 genre: row.get(2)?,
                 cover_url: row.get(3)?,
                 sample_count: row.get::<_, i64>(4)? as usize,
+                created_at: row.get(5)?,
             })
         })
         .map_err(|e| e.to_string())?
@@ -1483,7 +1525,8 @@ fn get_all_samples(state: State<AppState>) -> Result<Vec<Sample>, String> {
             "SELECT s.id, s.local_path, s.filename, s.audio_key, s.bpm, s.chord_type,
                     s.duration, COALESCE(s.genre, p.genre) as genre,
                     s.sample_type, s.tags,
-                    s.pack_uuid, p.name as pack_name, p.genre as pack_genre
+                    s.pack_uuid, p.name as pack_name, p.genre as pack_genre,
+                    s.created_at
              FROM samples s
              LEFT JOIN packs p ON s.pack_uuid = p.uuid
              ORDER BY s.filename COLLATE NOCASE",
@@ -1506,6 +1549,7 @@ fn get_all_samples(state: State<AppState>) -> Result<Vec<Sample>, String> {
                 pack_uuid: row.get(10)?,
                 pack_name: row.get(11)?,
                 pack_genre: row.get(12)?,
+                created_at: row.get(13)?,
             })
         })
         .map_err(|e| e.to_string())?
@@ -1523,7 +1567,8 @@ fn get_pack_samples(pack_uuid: String, state: State<AppState>) -> Result<Vec<Sam
             "SELECT s.id, s.local_path, s.filename, s.audio_key, s.bpm, s.chord_type,
                     s.duration, COALESCE(s.genre, p.genre) as genre,
                     s.sample_type, s.tags,
-                    s.pack_uuid, p.name as pack_name, p.genre as pack_genre
+                    s.pack_uuid, p.name as pack_name, p.genre as pack_genre,
+                    s.created_at
              FROM samples s
              LEFT JOIN packs p ON s.pack_uuid = p.uuid
              WHERE s.pack_uuid = ?1
@@ -1547,6 +1592,7 @@ fn get_pack_samples(pack_uuid: String, state: State<AppState>) -> Result<Vec<Sam
                 pack_uuid: row.get(10)?,
                 pack_name: row.get(11)?,
                 pack_genre: row.get(12)?,
+                created_at: row.get(13)?,
             })
         })
         .map_err(|e| e.to_string())?
@@ -1677,8 +1723,8 @@ fn import_single_pack(
     // 팩 등록
     let genre = parse_genre_from_path(&pack_path_str);
     tx.execute(
-        "INSERT OR REPLACE INTO packs (uuid, name, description, cover_url, genre, permalink)
-         VALUES (?1, ?2, ?3, NULL, ?4, NULL)",
+        "INSERT OR REPLACE INTO packs (uuid, name, description, cover_url, genre, permalink, created_at)
+         VALUES (?1, ?2, ?3, NULL, ?4, NULL, datetime('now'))",
         params![pack_uuid, pack_name, format!("외부 임포트: {}", pack_name), genre],
     )
     .map_err(|e| format!("팩 등록 실패: {}", e))?;
@@ -1751,8 +1797,8 @@ fn import_single_pack(
         tx.execute(
             "INSERT OR IGNORE INTO samples
              (local_path, filename, audio_key, bpm, chord_type, duration,
-              file_hash, genre, sample_type, tags, pack_uuid)
-             VALUES (?1, ?2, ?3, ?4, NULL, ?5, ?6, ?7, ?8, ?9, ?10)",
+              file_hash, genre, sample_type, tags, pack_uuid, created_at)
+             VALUES (?1, ?2, ?3, ?4, NULL, ?5, ?6, ?7, ?8, ?9, ?10, datetime('now'))",
             params![
                 dest_str,
                 filename,
@@ -1960,7 +2006,8 @@ fn update_sample(update: SampleUpdate, state: State<AppState>) -> Result<Sample,
             "SELECT s.id, s.local_path, s.filename, s.audio_key, s.bpm, s.chord_type,
                     s.duration, COALESCE(s.genre, p.genre) as genre,
                     s.sample_type, s.tags,
-                    s.pack_uuid, p.name as pack_name, p.genre as pack_genre
+                    s.pack_uuid, p.name as pack_name, p.genre as pack_genre,
+                    s.created_at
              FROM samples s
              LEFT JOIN packs p ON s.pack_uuid = p.uuid
              WHERE s.id = ?1",
@@ -1980,6 +2027,7 @@ fn update_sample(update: SampleUpdate, state: State<AppState>) -> Result<Sample,
                     pack_uuid: row.get(10)?,
                     pack_name: row.get(11)?,
                     pack_genre: row.get(12)?,
+                    created_at: row.get(13)?,
                 })
             },
         )
@@ -2010,7 +2058,7 @@ fn update_pack(update: PackUpdate, state: State<AppState>) -> Result<Pack, Strin
     // 업데이트된 팩을 다시 조회해서 반환
     let pack = db
         .query_row(
-            "SELECT p.uuid, p.name, p.genre, p.cover_url, COUNT(s.id) as sample_count
+            "SELECT p.uuid, p.name, p.genre, p.cover_url, COUNT(s.id) as sample_count, p.created_at
              FROM packs p
              LEFT JOIN samples s ON s.pack_uuid = p.uuid
              WHERE p.uuid = ?1
@@ -2023,6 +2071,7 @@ fn update_pack(update: PackUpdate, state: State<AppState>) -> Result<Pack, Strin
                     genre: row.get(2)?,
                     cover_url: row.get(3)?,
                     sample_count: row.get::<_, i64>(4)? as usize,
+                    created_at: row.get(5)?,
                 })
             },
         )
@@ -2203,7 +2252,8 @@ fn export_samples(
             "SELECT s.id, s.local_path, s.filename, s.audio_key, s.bpm, s.chord_type,
                     s.duration, COALESCE(s.genre, p.genre) as genre,
                     s.sample_type, s.tags,
-                    s.pack_uuid, p.name as pack_name, p.genre as pack_genre
+                    s.pack_uuid, p.name as pack_name, p.genre as pack_genre,
+                    s.created_at
              FROM samples s
              LEFT JOIN packs p ON s.pack_uuid = p.uuid
              WHERE s.id IN ({})",
@@ -2226,6 +2276,7 @@ fn export_samples(
                     pack_uuid: row.get(10)?,
                     pack_name: row.get(11)?,
                     pack_genre: row.get(12)?,
+                    created_at: row.get(13)?,
                 })
             })
             .map_err(|e| e.to_string())?
@@ -2315,6 +2366,168 @@ fn export_samples(
     Ok(exported)
 }
 
+// ── Playlist commands ────────────────────────────────────────────────
+
+#[tauri::command]
+fn get_playlists(state: State<AppState>) -> Result<Vec<Playlist>, String> {
+    let db = state.db.lock().unwrap();
+    let mut stmt = db
+        .prepare(
+            "SELECT p.id, p.name, p.color, p.created_at, COUNT(ps.sample_id) as sample_count
+             FROM playlists p
+             LEFT JOIN playlist_samples ps ON ps.playlist_id = p.id
+             GROUP BY p.id
+             ORDER BY p.created_at DESC",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let playlists = stmt
+        .query_map([], |row| {
+            Ok(Playlist {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                color: row.get(2)?,
+                created_at: row.get(3)?,
+                sample_count: row.get::<_, i64>(4)? as usize,
+            })
+        })
+        .map_err(|e| e.to_string())?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    Ok(playlists)
+}
+
+#[tauri::command]
+fn create_playlist(name: String, color: Option<String>, state: State<AppState>) -> Result<Playlist, String> {
+    let db = state.db.lock().unwrap();
+    db.execute(
+        "INSERT INTO playlists (name, color) VALUES (?1, ?2)",
+        params![name, color],
+    )
+    .map_err(|e| format!("플레이리스트 생성 실패: {}", e))?;
+
+    let id = db.last_insert_rowid();
+    let playlist = db
+        .query_row(
+            "SELECT id, name, color, created_at FROM playlists WHERE id = ?1",
+            params![id],
+            |row| {
+                Ok(Playlist {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    color: row.get(2)?,
+                    created_at: row.get(3)?,
+                    sample_count: 0,
+                })
+            },
+        )
+        .map_err(|e| e.to_string())?;
+
+    Ok(playlist)
+}
+
+#[tauri::command]
+fn rename_playlist(playlist_id: i64, name: String, state: State<AppState>) -> Result<(), String> {
+    let db = state.db.lock().unwrap();
+    db.execute(
+        "UPDATE playlists SET name = ?1 WHERE id = ?2",
+        params![name, playlist_id],
+    )
+    .map_err(|e| format!("플레이리스트 이름 변경 실패: {}", e))?;
+    Ok(())
+}
+
+#[tauri::command]
+fn update_playlist_color(playlist_id: i64, color: Option<String>, state: State<AppState>) -> Result<(), String> {
+    let db = state.db.lock().unwrap();
+    db.execute(
+        "UPDATE playlists SET color = ?1 WHERE id = ?2",
+        params![color, playlist_id],
+    )
+    .map_err(|e| format!("플레이리스트 색상 변경 실패: {}", e))?;
+    Ok(())
+}
+
+#[tauri::command]
+fn delete_playlist(playlist_id: i64, state: State<AppState>) -> Result<(), String> {
+    let db = state.db.lock().unwrap();
+    db.execute("DELETE FROM playlist_samples WHERE playlist_id = ?1", params![playlist_id])
+        .map_err(|e| e.to_string())?;
+    db.execute("DELETE FROM playlists WHERE id = ?1", params![playlist_id])
+        .map_err(|e| format!("플레이리스트 삭제 실패: {}", e))?;
+    Ok(())
+}
+
+#[tauri::command]
+fn add_to_playlist(playlist_id: i64, sample_ids: Vec<i64>, state: State<AppState>) -> Result<(), String> {
+    let db = state.db.lock().unwrap();
+    let mut stmt = db
+        .prepare("INSERT OR IGNORE INTO playlist_samples (playlist_id, sample_id) VALUES (?1, ?2)")
+        .map_err(|e| e.to_string())?;
+    for sid in &sample_ids {
+        stmt.execute(params![playlist_id, sid]).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn remove_from_playlist(playlist_id: i64, sample_ids: Vec<i64>, state: State<AppState>) -> Result<(), String> {
+    let db = state.db.lock().unwrap();
+    for sid in &sample_ids {
+        db.execute(
+            "DELETE FROM playlist_samples WHERE playlist_id = ?1 AND sample_id = ?2",
+            params![playlist_id, sid],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn get_playlist_samples(playlist_id: i64, state: State<AppState>) -> Result<Vec<Sample>, String> {
+    let db = state.db.lock().unwrap();
+    let mut stmt = db
+        .prepare(
+            "SELECT s.id, s.local_path, s.filename, s.audio_key, s.bpm, s.chord_type,
+                    s.duration, COALESCE(s.genre, p.genre) as genre,
+                    s.sample_type, s.tags,
+                    s.pack_uuid, p.name as pack_name, p.genre as pack_genre,
+                    s.created_at
+             FROM playlist_samples ps
+             JOIN samples s ON s.id = ps.sample_id
+             LEFT JOIN packs p ON s.pack_uuid = p.uuid
+             WHERE ps.playlist_id = ?1
+             ORDER BY ps.added_at DESC",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let samples = stmt
+        .query_map(params![playlist_id], |row| {
+            Ok(Sample {
+                id: row.get(0)?,
+                local_path: row.get(1)?,
+                filename: row.get(2)?,
+                audio_key: row.get(3)?,
+                bpm: row.get(4)?,
+                chord_type: row.get(5)?,
+                duration: row.get(6)?,
+                genre: row.get(7)?,
+                sample_type: row.get(8)?,
+                tags: row.get(9)?,
+                pack_uuid: row.get(10)?,
+                pack_name: row.get(11)?,
+                pack_genre: row.get(12)?,
+                created_at: row.get(13)?,
+            })
+        })
+        .map_err(|e| e.to_string())?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    Ok(samples)
+}
+
 // ── Drag icon path ──────────────────────────────────────────────────
 
 #[tauri::command]
@@ -2373,6 +2586,14 @@ pub fn run() {
             delete_pack,
             delete_all_samples,
             get_drag_icon_path,
+            get_playlists,
+            create_playlist,
+            rename_playlist,
+            update_playlist_color,
+            delete_playlist,
+            add_to_playlist,
+            remove_from_playlist,
+            get_playlist_samples,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

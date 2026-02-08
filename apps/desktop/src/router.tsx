@@ -9,6 +9,7 @@ import HomePage from "@/routes/HomePage";
 import PacksPage from "@/routes/PacksPage";
 import PackDetailPage from "@/routes/PackDetailPage";
 import SoundsPage from "@/routes/SoundsPage";
+import PlaylistPage from "@/routes/PlaylistPage";
 import SettingsPage from "@/routes/SettingsPage";
 import type { SampleFilterSearch, SampleType, SortBy, SortDir, PacksSearch } from "@/types";
 
@@ -84,6 +85,19 @@ const soundsRoute = createRoute({
   validateSearch: validateSampleSearch,
 });
 
+// ── Playlist (/playlist/$playlistId) ──────────────────────────────
+const playlistRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "playlist",
+});
+
+const playlistDetailRoute = createRoute({
+  getParentRoute: () => playlistRoute,
+  path: "$playlistId",
+  component: PlaylistPage,
+  validateSearch: validateSampleSearch,
+});
+
 // ── Settings (/settings) ──────────────────────────────────────────
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -96,6 +110,7 @@ const routeTree = rootRoute.addChildren([
   indexRoute,
   packsRoute.addChildren([packsIndexRoute, packDetailRoute]),
   soundsRoute,
+  playlistRoute.addChildren([playlistDetailRoute]),
   settingsRoute,
 ]);
 
