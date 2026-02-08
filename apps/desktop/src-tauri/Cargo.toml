@@ -1,6 +1,6 @@
 [package]
 name = "slice"
-version = "0.1.0"
+version = "0.1.1"
 description = "A sample browser for Splice downloads"
 authors = ["jaeho"]
 edition = "2021"

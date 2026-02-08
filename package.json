@@ -1,7 +1,7 @@
 {
   "name": "slice-monorepo",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "workspaces": [
     "apps/*"
@@ -11,7 +11,9 @@
     "dev:landing": "cd apps/landing && bun run dev",
     "build:desktop": "cd apps/desktop && bun run tauri build",
     "build:landing": "cd apps/landing && bun run build",
-    "release": "cd apps/desktop && bun run tauri build --bundles dmg && echo '\n✅ DMG 생성 완료:' && ls -lh src-tauri/target/release/bundle/dmg/*.dmg"
+    "release": "bash scripts/release.sh",
+    "release:draft": "bash scripts/release.sh --draft",
+    "release:skip-build": "bash scripts/release.sh --skip-build"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2",
