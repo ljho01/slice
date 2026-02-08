@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2 } from "lucide-react";
+import { useI18n } from "@/contexts/I18nContext";
 import type { Pack } from "@/types";
 
 interface Props {
@@ -22,6 +23,7 @@ interface Props {
 }
 
 export default function PackEditDialog({ pack, open, onOpenChange, onSaved }: Props) {
+  const { t } = useI18n();
   const [name, setName] = useState("");
   const [genre, setGenre] = useState("");
   const [saving, setSaving] = useState(false);
@@ -59,7 +61,7 @@ export default function PackEditDialog({ pack, open, onOpenChange, onSaved }: Pr
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>팩 편집</DialogTitle>
+          <DialogTitle>{t("packEdit.title")}</DialogTitle>
           <DialogDescription className="truncate">
             {pack.name}
           </DialogDescription>
@@ -68,19 +70,19 @@ export default function PackEditDialog({ pack, open, onOpenChange, onSaved }: Pr
         <div className="grid gap-4 py-2">
           {/* 팩 이름 */}
           <div className="grid gap-1.5">
-            <Label htmlFor="edit-pack-name">팩 이름</Label>
+            <Label htmlFor="edit-pack-name">{t("packEdit.packName")}</Label>
             <Input
               id="edit-pack-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="팩 이름"
+              placeholder={t("packEdit.packName")}
               className="h-9"
             />
           </div>
 
           {/* 장르 */}
           <div className="grid gap-1.5">
-            <Label htmlFor="edit-pack-genre">장르</Label>
+            <Label htmlFor="edit-pack-genre">{t("packEdit.genre")}</Label>
             <Input
               id="edit-pack-genre"
               value={genre}
@@ -93,11 +95,11 @@ export default function PackEditDialog({ pack, open, onOpenChange, onSaved }: Pr
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
-            취소
+            {t("common.cancel")}
           </Button>
           <Button onClick={handleSave} disabled={saving}>
             {saving && <Loader2 size={14} className="mr-1.5 animate-spin" />}
-            저장
+            {t("common.save")}
           </Button>
         </DialogFooter>
       </DialogContent>

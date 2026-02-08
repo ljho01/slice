@@ -11,6 +11,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
+import { useI18n } from "@/contexts/I18nContext";
 import type { Pack, Sample, LibraryData, LibraryStatus, WaveformData, ImportProgress, ImportResult, SampleFilterSearch, FolderNode } from "@/types";
 
 type AppPhase = "loading" | "import" | "ready";
@@ -73,6 +74,7 @@ export function useApp() {
 }
 
 export function AppProvider({ children }: { children: ReactNode }) {
+  const { t } = useI18n();
   // ── Phase ───────────────────────────────────────────────────────
   const [phase, setPhase] = useState<AppPhase>("loading");
   const [libraryStatus, setLibraryStatus] = useState<LibraryStatus | null>(null);
@@ -746,7 +748,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // 1단계: 폴더 선택 → 스캔 → 트리 표시
   const importExternalFolder = useCallback(async () => {
-    const selected = await open({ directory: true, title: "샘플팩 폴더 선택" });
+    const selected = await open({ directory: true, title: t("import.folderDialogTitle") });
     if (!selected) return;
 
     try {

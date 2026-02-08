@@ -10,7 +10,8 @@
     "dev:desktop": "cd apps/desktop && bun run tauri dev",
     "dev:landing": "cd apps/landing && bun run dev",
     "build:desktop": "cd apps/desktop && bun run tauri build",
-    "build:landing": "cd apps/landing && bun run build"
+    "build:landing": "cd apps/landing && bun run build",
+    "release": "cd apps/desktop && bun run tauri build --bundles dmg && echo '\n✅ DMG 생성 완료:' && ls -lh src-tauri/target/release/bundle/dmg/*.dmg"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2",

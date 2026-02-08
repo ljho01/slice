@@ -44,6 +44,7 @@ import {
 } from "lucide-react";
 import SampleEditDialog from "@/components/SampleEditDialog";
 import { startDrag } from "@crabnebula/tauri-plugin-drag";
+import { useI18n } from "@/contexts/I18nContext";
 import type { Sample, WaveformData, ExportProgress, SampleFilterSearch, SampleType, SortBy, SortDir } from "@/types";
 
 /* ── String → soft pastel color (deterministic) ── */
@@ -628,11 +629,13 @@ export default function SampleBrowser({
     return meta.instruments.filter((i) => i.tag.toLowerCase().includes(q));
   }, [meta.instruments, instSearch]);
 
+  const { t } = useI18n();
+
   const instLabel = selectedInstruments.size === 0
     ? "Instrument"
     : selectedInstruments.size === 1
       ? [...selectedInstruments][0]
-      : `${selectedInstruments.size}개 악기`;
+      : t("browser.instrumentCount", { count: selectedInstruments.size });
 
   // ── Keyboard arrow navigation ──
   useEffect(() => {
@@ -661,7 +664,7 @@ export default function SampleBrowser({
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-4">
         <div className="h-7 w-7 animate-spin rounded-full border-[3px] border-border border-t-muted-foreground" />
-        <p className="text-sm text-muted-foreground">샘플 로딩 중...</p>
+        <p className="text-sm text-muted-foreground">{t("browser.loading")}</p>
       </div>
     );
   }
@@ -670,7 +673,7 @@ export default function SampleBrowser({
     ? "Genre"
     : selectedGenres.size === 1
       ? [...selectedGenres][0]
-      : `${selectedGenres.size}개 장르`;
+      : t("browser.genreCount", { count: selectedGenres.size });
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
@@ -685,13 +688,13 @@ export default function SampleBrowser({
           <div>
             <h1 className="text-xl font-bold tracking-tight">{title}</h1>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              {subtitle || `${sorted.length.toLocaleString()} / ${samples.length.toLocaleString()} 샘플`}
+              {subtitle || t("browser.sampleCount", { filtered: sorted.length.toLocaleString(), total: samples.length.toLocaleString() })}
             </p>
           </div>
         </div>
         {activeCount > 0 && (
           <Button variant="ghost" size="sm" className="h-7 text-xs text-foreground/70" onClick={clearAll}>
-            <X size={13} className="mr-1" /> 필터 초기화 ({activeCount})
+            <X size={13} className="mr-1" /> {t("browser.clearFilters", { count: activeCount })}
           </Button>
         )}
       </div>
@@ -728,8 +731,8 @@ export default function SampleBrowser({
             </div>
             {selectedGenres.size > 0 && (
               <div className="p-1.5 flex justify-end">
-                <Button variant="ghost" size="sm" className="h-6 text-xs text-muted-foreground" onClick={() => onFiltersChange({ genres: [] })}>
-                  초기화
+                  <Button variant="ghost" size="sm" className="h-6 text-xs text-muted-foreground" onClick={() => onFiltersChange({ genres: [] })}>
+                  {t("common.reset")}
                 </Button>
               </div>
             )}
@@ -751,7 +754,7 @@ export default function SampleBrowser({
             <PopoverContent className="w-52 p-0 overflow-hidden" align="start">
               <div className="p-2">
                 <Input
-                  placeholder="악기 검색..."
+                  placeholder={t("browser.searchInstruments")}
                   value={instSearch}
                   onChange={(e) => setInstSearch(e.target.value)}
                   className="h-7 text-xs"
@@ -759,7 +762,7 @@ export default function SampleBrowser({
               </div>
               <div className="max-h-64 overflow-y-auto p-1">
                 {filteredInstruments.length === 0 ? (
-                  <p className="py-4 text-center text-xs text-muted-foreground">결과 없음</p>
+                  <p className="py-4 text-center text-xs text-muted-foreground">{t("browser.noResults")}</p>
                 ) : (
                   filteredInstruments.map(({ tag, count }) => (
                     <label
@@ -780,7 +783,7 @@ export default function SampleBrowser({
               {selectedInstruments.size > 0 && (
                 <div className="p-1.5 flex justify-end">
                   <Button variant="ghost" size="sm" className="h-6 text-xs text-muted-foreground" onClick={() => onFiltersChange({ instruments: [] })}>
-                    초기화
+                    {t("common.reset")}
                   </Button>
                 </div>
               )}
@@ -809,7 +812,7 @@ export default function SampleBrowser({
               <div className="relative">
                 <Tag className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" size={13} />
                 <Input
-                  placeholder="태그 검색..."
+                  placeholder={t("browser.searchTags")}
                   value={tagSearch}
                   onChange={(e) => setTagSearch(e.target.value)}
                   className="h-8 pl-8 text-xs"
@@ -880,7 +883,7 @@ export default function SampleBrowser({
               <Search className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" size={13} />
               <Input
                 ref={searchInputRef}
-                placeholder="샘플 검색..."
+                placeholder={t("browser.searchSamples")}
                 value={query}
                 onChange={(e) => onFiltersChange({ q: e.target.value })}
                 onBlur={() => { if (!query) setSearchOpen(false); }}
@@ -908,11 +911,11 @@ export default function SampleBrowser({
           <PopoverContent className="w-44 p-0 overflow-hidden" align="end">
             <div className="p-1">
               {([
-                { value: "filename" as SortBy, label: "파일명", canDir: true },
+                { value: "filename" as SortBy, label: t("browser.sortFilename"), canDir: true },
                 { value: "bpm" as SortBy, label: "BPM", canDir: true },
-                { value: "duration" as SortBy, label: "길이", canDir: true },
-                { value: "recent" as SortBy, label: "최신순", canDir: true },
-                { value: "shuffle" as SortBy, label: "랜덤", canDir: false },
+                { value: "duration" as SortBy, label: t("browser.sortDuration"), canDir: true },
+                { value: "recent" as SortBy, label: t("browser.sortRecent"), canDir: true },
+                { value: "shuffle" as SortBy, label: t("browser.sortShuffle"), canDir: false },
               ]).map(({ value, label, canDir }) => {
                 const isSelected = sortBy === value;
                 return (
@@ -981,7 +984,7 @@ export default function SampleBrowser({
               />
               <div className="mt-3 flex justify-end">
                 <Button variant="ghost" size="sm" className="h-6 text-xs text-muted-foreground" onClick={() => onFiltersChange({ bpmMin: undefined, bpmMax: undefined })}>
-                  초기화
+                  {t("common.reset")}
                 </Button>
               </div>
             </PopoverContent>
@@ -997,7 +1000,7 @@ export default function SampleBrowser({
                 selectedKeys.size > 0 ? "bg-black text-white dark:bg-white dark:text-black" : "bg-secondary text-muted-foreground hover:text-foreground"
               )}>
                 {selectedKeys.size > 0
-                  ? selectedKeys.size <= 2 ? [...selectedKeys].join(", ") : `${selectedKeys.size}개 키`
+                  ? selectedKeys.size <= 2 ? [...selectedKeys].join(", ") : t("browser.keyCount", { count: selectedKeys.size })
                   : "Key"}
                 <ChevronDown size={11} />
               </button>
@@ -1005,7 +1008,7 @@ export default function SampleBrowser({
             <PopoverContent className="w-52 p-0 overflow-hidden" align="end">
               <div className="p-2">
                 <Input
-                  placeholder="키 검색..."
+                  placeholder={t("browser.searchKeys")}
                   value={keySearch}
                   onChange={(e) => setKeySearch(e.target.value)}
                   className="h-7 text-xs"
@@ -1013,7 +1016,7 @@ export default function SampleBrowser({
               </div>
               <div className="max-h-56 overflow-y-auto p-1">
                 {filteredKeys.length === 0 ? (
-                  <p className="py-4 text-center text-xs text-muted-foreground">결과 없음</p>
+                  <p className="py-4 text-center text-xs text-muted-foreground">{t("browser.noResults")}</p>
                 ) : (
                   filteredKeys.map(({ key, count }) => (
                     <label
@@ -1034,7 +1037,7 @@ export default function SampleBrowser({
               {selectedKeys.size > 0 && (
                 <div className="p-1.5 flex justify-end">
                   <Button variant="ghost" size="sm" className="h-6 text-xs text-muted-foreground" onClick={() => onFiltersChange({ keys: [] })}>
-                    초기화
+                    {t("common.reset")}
                   </Button>
                 </div>
               )}
@@ -1126,6 +1129,7 @@ function VirtualSampleList({
   onTagClick: (tag: string) => void;
   onNavigateToPack?: (packUuid: string) => void;
 }) {
+  const { t } = useI18n();
   const parentRef = useRef<HTMLDivElement>(null);
 
   const virtualizer = useVirtualizer({
@@ -1156,7 +1160,7 @@ function VirtualSampleList({
     return (
       <div className="flex-1 overflow-y-auto">
         <p className="py-16 text-center text-sm text-muted-foreground">
-          {query || activeCount > 0 ? "필터 조건에 맞는 샘플이 없습니다" : "샘플이 없습니다"}
+          {query || activeCount > 0 ? t("browser.noSamplesFiltered") : t("browser.noSamples")}
         </p>
       </div>
     );
@@ -1222,7 +1226,7 @@ function VirtualSampleList({
                     onNavigateToPack(sample.pack_uuid);
                   }
                 }}
-                title={sample.pack_name ? `${sample.pack_name} 팩 보기` : undefined}
+                title={sample.pack_name ? t("browser.viewPack", { name: sample.pack_name }) : undefined}
               >
                 <span className="text-sm font-bold select-none text-muted-foreground">
                   {packInitial}
@@ -1309,7 +1313,7 @@ function VirtualSampleList({
                     onClick={() => onEditSample(sample)}
                   >
                     <Pencil size={14} />
-                    속성 편집
+                    {t("browser.editProperties")}
                   </ContextMenuItem>
                 )}
                 {onEditSample && onDeleteSample && <ContextMenuSeparator />}
@@ -1319,7 +1323,7 @@ function VirtualSampleList({
                     onClick={() => onDeleteSample(sample)}
                   >
                     <Trash2 size={14} />
-                    샘플 삭제
+                    {t("browser.deleteSample")}
                   </ContextMenuItem>
                 )}
               </ContextMenuContent>

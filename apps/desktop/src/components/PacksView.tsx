@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/context-menu";
 import PackEditDialog from "@/components/PackEditDialog";
 import { ChevronDown, FolderOpen, Search, Plus, Trash2, Pencil, X, Grid3x3, List, ArrowUpDown } from "lucide-react";
+import { useI18n } from "@/contexts/I18nContext";
 import type { Pack } from "@/types";
 
 interface PacksViewProps {
@@ -34,19 +35,20 @@ interface PacksViewProps {
 type ViewMode = "grid" | "list";
 type SortOption = "name-asc" | "name-desc" | "samples-desc" | "samples-asc";
 
-const sortLabels: Record<SortOption, string> = {
-  "name-asc": "이름 (A-Z)",
-  "name-desc": "이름 (Z-A)",
-  "samples-desc": "샘플 많은 순",
-  "samples-asc": "샘플 적은 순",
-};
-
 export default function PacksView({ packs, loading, onSelectPack, onDeletePack, onEditPack, filter, onFilterChange, onImportExternal }: PacksViewProps) {
+  const { t } = useI18n();
   const [selectedGenres, setSelectedGenres] = useState<Set<string>>(new Set());
   const [searchOpen, setSearchOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [sortBy, setSortBy] = useState<SortOption>("name-asc");
+
+  const sortLabels: Record<SortOption, string> = {
+    "name-asc": t("packs.sortNameAsc"),
+    "name-desc": t("packs.sortNameDesc"),
+    "samples-desc": t("packs.sortSamplesDesc"),
+    "samples-asc": t("packs.sortSamplesAsc"),
+  };
 
   // 팩 편집 다이얼로그 상태
   const [editingPack, setEditingPack] = useState<Pack | null>(null);
@@ -116,13 +118,13 @@ export default function PacksView({ packs, loading, onSelectPack, onDeletePack, 
     ? "Genre"
     : selectedGenres.size === 1
       ? [...selectedGenres][0]
-      : `${selectedGenres.size}개 장르`;
+      : t("browser.genreCount", { count: selectedGenres.size });
 
   if (loading) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-4">
         <div className="h-7 w-7 animate-spin rounded-full border-[3px] border-border border-t-muted-foreground" />
-        <p className="text-sm text-muted-foreground">라이브러리 스캔 중...</p>
+        <p className="text-sm text-muted-foreground">{t("packs.scanning")}</p>
       </div>
     );
   }
@@ -135,14 +137,14 @@ export default function PacksView({ packs, loading, onSelectPack, onDeletePack, 
           <h1 className="text-xl font-bold tracking-tight">Packs</h1>
           <p className="mt-0.5 text-xs text-muted-foreground">
             {filtered.length !== packs.length
-              ? `${filtered.length} / ${packs.length}개 팩`
-              : `${packs.length}개 팩`} · {totalSamples.toLocaleString()}개 샘플
+              ? t("packs.filteredCount", { filtered: filtered.length, total: packs.length })
+              : t("packs.countLabel", { count: packs.length })} · {t("packs.sampleCountLabel", { count: totalSamples.toLocaleString() })}
           </p>
         </div>
         {onImportExternal && (
           <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={onImportExternal}>
             <Plus size={14} />
-            외부 팩 추가
+            {t("packs.addExternal")}
           </Button>
         )}
       </div>
@@ -181,7 +183,7 @@ export default function PacksView({ packs, loading, onSelectPack, onDeletePack, 
               {selectedGenres.size > 0 && (
                 <div className="p-1.5 flex justify-end">
                   <Button variant="ghost" size="sm" className="h-6 text-xs text-muted-foreground" onClick={() => setSelectedGenres(new Set())}>
-                    초기화
+                    {t("common.reset")}
                   </Button>
                 </div>
               )}
@@ -191,7 +193,7 @@ export default function PacksView({ packs, loading, onSelectPack, onDeletePack, 
 
         {activeCount > 0 && (
           <Button variant="ghost" size="sm" className="h-6 text-2xs text-foreground/70 px-1.5" onClick={() => setSelectedGenres(new Set())}>
-            <X size={11} className="mr-0.5" /> 필터 초기화
+            <X size={11} className="mr-0.5" /> {t("packs.clearFilters")}
           </Button>
         )}
 
@@ -231,7 +233,7 @@ export default function PacksView({ packs, loading, onSelectPack, onDeletePack, 
               viewMode === "grid" ? "bg-background text-foreground" : "text-muted-foreground hover:text-foreground"
             )}
             onClick={() => setViewMode("grid")}
-            title="그리드 뷰"
+            title={t("packs.gridView")}
           >
             <Grid3x3 size={14} />
           </button>
@@ -241,7 +243,7 @@ export default function PacksView({ packs, loading, onSelectPack, onDeletePack, 
               viewMode === "list" ? "bg-background text-foreground" : "text-muted-foreground hover:text-foreground"
             )}
             onClick={() => setViewMode("list")}
-            title="리스트 뷰"
+            title={t("packs.listView")}
           >
             <List size={14} />
           </button>
@@ -257,7 +259,7 @@ export default function PacksView({ packs, loading, onSelectPack, onDeletePack, 
               <Search className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" size={13} />
               <Input
                 ref={searchInputRef}
-                placeholder="팩 검색..."
+                placeholder={t("packs.searchPacks")}
                 value={filter}
                 onChange={(e) => onFilterChange(e.target.value)}
                 onBlur={() => { if (!filter) setSearchOpen(false); }}
@@ -280,7 +282,7 @@ export default function PacksView({ packs, loading, onSelectPack, onDeletePack, 
       <div className="flex-1 overflow-y-auto">
         {filtered.length === 0 ? (
           <p className="py-10 text-center text-sm text-muted-foreground">
-            {filter || activeCount > 0 ? "필터 조건에 맞는 팩이 없습니다" : "팩을 찾을 수 없습니다"}
+            {filter || activeCount > 0 ? t("packs.noPacksFiltered") : t("packs.noPacks")}
           </p>
         ) : viewMode === "grid" ? (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3 p-6">
@@ -312,7 +314,7 @@ export default function PacksView({ packs, loading, onSelectPack, onDeletePack, 
                     {onEditPack && (
                       <ContextMenuItem onClick={() => handleEditPack(pack)}>
                         <Pencil size={14} />
-                        속성 편집
+                        {t("browser.editProperties")}
                       </ContextMenuItem>
                     )}
                     {onEditPack && onDeletePack && <ContextMenuSeparator />}
@@ -322,7 +324,7 @@ export default function PacksView({ packs, loading, onSelectPack, onDeletePack, 
                         onClick={() => onDeletePack(pack)}
                       >
                         <Trash2 size={14} />
-                        팩 삭제 ({pack.sample_count}개 샘플)
+                        {t("packs.deletePack", { count: pack.sample_count })}
                       </ContextMenuItem>
                     )}
                   </ContextMenuContent>
@@ -360,7 +362,7 @@ export default function PacksView({ packs, loading, onSelectPack, onDeletePack, 
                     {onEditPack && (
                       <ContextMenuItem onClick={() => handleEditPack(pack)}>
                         <Pencil size={14} />
-                        속성 편집
+                        {t("browser.editProperties")}
                       </ContextMenuItem>
                     )}
                     {onEditPack && onDeletePack && <ContextMenuSeparator />}
@@ -370,7 +372,7 @@ export default function PacksView({ packs, loading, onSelectPack, onDeletePack, 
                         onClick={() => onDeletePack(pack)}
                       >
                         <Trash2 size={14} />
-                        팩 삭제 ({pack.sample_count}개 샘플)
+                        {t("packs.deletePack", { count: pack.sample_count })}
                       </ContextMenuItem>
                     )}
                   </ContextMenuContent>

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { getRouteApi, useNavigate } from "@tanstack/react-router";
 import { invoke } from "@tauri-apps/api/core";
 import { useApp } from "@/contexts/AppContext";
+import { useI18n } from "@/contexts/I18nContext";
 import SampleBrowser from "@/components/SampleBrowser";
 import type { Sample, SampleFilterSearch } from "@/types";
 
@@ -29,6 +30,7 @@ export default function PackDetailPage() {
   const search = route.useSearch();
   const navigate = useNavigate({ from: "/packs/$packId" });
   const { packs, currentSample, isPlaying, playSample, deleteSample } = useApp();
+  const { t } = useI18n();
 
   const pack = packs.find((p) => p.uuid === packId);
   const [samples, setSamples] = useState<Sample[]>([]);
@@ -84,8 +86,8 @@ export default function PackDetailPage() {
     <SampleBrowser
       samples={samples}
       loading={loading}
-      title={pack?.name || "팩"}
-      subtitle={`${samples.length} 샘플`}
+      title={pack?.name || t("packDetail.pack")}
+      subtitle={t("packDetail.sampleCount", { count: samples.length })}
       showBack
       onBack={handleBack}
       currentSample={currentSample}

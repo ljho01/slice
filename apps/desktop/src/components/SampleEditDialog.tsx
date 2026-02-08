@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2 } from "lucide-react";
+import { useI18n } from "@/contexts/I18nContext";
 import type { Sample } from "@/types";
 
 const KEY_OPTIONS = [
@@ -27,6 +28,7 @@ interface Props {
 }
 
 export default function SampleEditDialog({ sample, open, onOpenChange, onSaved }: Props) {
+  const { t } = useI18n();
   const [filename, setFilename] = useState("");
   const [tags, setTags] = useState("");
   const [genre, setGenre] = useState("");
@@ -79,7 +81,7 @@ export default function SampleEditDialog({ sample, open, onOpenChange, onSaved }
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>샘플 편집</DialogTitle>
+          <DialogTitle>{t("sampleEdit.title")}</DialogTitle>
           <DialogDescription className="truncate">
             {sample.filename}
           </DialogDescription>
@@ -88,32 +90,32 @@ export default function SampleEditDialog({ sample, open, onOpenChange, onSaved }
         <div className="grid gap-4 py-2">
           {/* 파일명 */}
           <div className="grid gap-1.5">
-            <Label htmlFor="edit-filename">파일명</Label>
+            <Label htmlFor="edit-filename">{t("sampleEdit.filename")}</Label>
             <Input
               id="edit-filename"
               value={filename}
               onChange={(e) => setFilename(e.target.value)}
-              placeholder="파일명"
+              placeholder={t("sampleEdit.filename")}
               className="h-9"
             />
           </div>
 
           {/* 태그 */}
           <div className="grid gap-1.5">
-            <Label htmlFor="edit-tags">태그</Label>
+            <Label htmlFor="edit-tags">{t("sampleEdit.tags")}</Label>
             <Input
               id="edit-tags"
               value={tags}
               onChange={(e) => setTags(e.target.value)}
-              placeholder="콤마로 구분 (예: kick, drums, 808)"
+              placeholder={t("sampleEdit.tagsPlaceholder")}
               className="h-9"
             />
-            <p className="text-2xs text-muted-foreground">콤마(,)로 구분하여 여러 태그 입력</p>
+            <p className="text-2xs text-muted-foreground">{t("sampleEdit.tagsHint")}</p>
           </div>
 
           {/* 장르 */}
           <div className="grid gap-1.5">
-            <Label htmlFor="edit-genre">장르</Label>
+            <Label htmlFor="edit-genre">{t("sampleEdit.genre")}</Label>
             <Input
               id="edit-genre"
               value={genre}
@@ -126,28 +128,28 @@ export default function SampleEditDialog({ sample, open, onOpenChange, onSaved }
           {/* 키 + 코드 타입 (한 줄) */}
           <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-1.5">
-              <Label htmlFor="edit-key">키</Label>
+              <Label htmlFor="edit-key">{t("sampleEdit.key")}</Label>
               <select
                 id="edit-key"
                 value={audioKey}
                 onChange={(e) => setAudioKey(e.target.value)}
                 className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               >
-                <option value="">없음</option>
+                <option value="">{t("common.none")}</option>
                 {KEY_OPTIONS.filter(Boolean).map((k) => (
                   <option key={k} value={k.toLowerCase()}>{k}</option>
                 ))}
               </select>
             </div>
             <div className="grid gap-1.5">
-              <Label htmlFor="edit-chord">코드 타입</Label>
+              <Label htmlFor="edit-chord">{t("sampleEdit.chordType")}</Label>
               <select
                 id="edit-chord"
                 value={chordType}
                 onChange={(e) => setChordType(e.target.value)}
                 className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               >
-                <option value="">없음</option>
+                <option value="">{t("common.none")}</option>
                 <option value="major">Major</option>
                 <option value="minor">Minor</option>
               </select>
@@ -170,14 +172,14 @@ export default function SampleEditDialog({ sample, open, onOpenChange, onSaved }
               />
             </div>
             <div className="grid gap-1.5">
-              <Label htmlFor="edit-type">타입</Label>
+              <Label htmlFor="edit-type">{t("sampleEdit.type")}</Label>
               <select
                 id="edit-type"
                 value={sampleType}
                 onChange={(e) => setSampleType(e.target.value)}
                 className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               >
-                <option value="">없음</option>
+                <option value="">{t("common.none")}</option>
                 <option value="oneshot">One Shot</option>
                 <option value="loop">Loop</option>
               </select>
@@ -187,11 +189,11 @@ export default function SampleEditDialog({ sample, open, onOpenChange, onSaved }
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
-            취소
+            {t("common.cancel")}
           </Button>
           <Button onClick={handleSave} disabled={saving}>
             {saving && <Loader2 size={14} className="mr-1.5 animate-spin" />}
-            저장
+            {t("common.save")}
           </Button>
         </DialogFooter>
       </DialogContent>

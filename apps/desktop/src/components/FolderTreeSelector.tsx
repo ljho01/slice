@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useI18n } from "@/contexts/I18nContext";
 import type { FolderNode, PackConflict } from "@/types";
 
 interface FolderTreeSelectorProps {
@@ -129,6 +130,7 @@ interface ConflictResolverProps {
 }
 
 function ConflictResolver({ conflicts, onConfirm, onBack }: ConflictResolverProps) {
+  const { t } = useI18n();
   const [decisions, setDecisions] = useState<Record<string, ConflictAction>>(() => {
     const init: Record<string, ConflictAction> = {};
     for (const c of conflicts) {
@@ -149,10 +151,10 @@ function ConflictResolver({ conflicts, onConfirm, onBack }: ConflictResolverProp
       <div className="px-5 py-4 border-b border-border">
         <div className="flex items-center gap-2 text-amber-400">
           <AlertTriangle size={18} />
-          <h2 className="text-lg font-semibold text-foreground">이름이 같은 팩이 있습니다</h2>
+          <h2 className="text-lg font-semibold text-foreground">{t("folder.conflictTitle")}</h2>
         </div>
         <p className="text-xs text-muted-foreground mt-1">
-          각 팩을 기존 팩과 교체하거나 새 팩으로 추가할 수 있습니다
+          {t("folder.conflictDesc")}
         </p>
       </div>
 
@@ -168,7 +170,7 @@ function ConflictResolver({ conflicts, onConfirm, onBack }: ConflictResolverProp
                 <Folder size={14} className="text-amber-400" />
                 <span className="font-medium text-sm text-foreground">{c.name}</span>
                 <span className="text-xs text-muted-foreground">
-                  (기존 {c.existing_sample_count}개 샘플)
+                  {t("folder.existingSamples", { count: c.existing_sample_count })}
                 </span>
               </div>
 
@@ -181,7 +183,7 @@ function ConflictResolver({ conflicts, onConfirm, onBack }: ConflictResolverProp
                     }`}
                 >
                   <RefreshCw size={12} />
-                  기존 팩 교체
+                  {t("folder.replaceExisting")}
                 </button>
                 <button
                   onClick={() => setDecisions((p) => ({ ...p, [c.name]: "new" }))}
@@ -191,7 +193,7 @@ function ConflictResolver({ conflicts, onConfirm, onBack }: ConflictResolverProp
                     }`}
                 >
                   <Plus size={12} />
-                  새 팩으로 추가
+                  {t("folder.addAsNew")}
                 </button>
               </div>
             </div>
@@ -203,18 +205,18 @@ function ConflictResolver({ conflicts, onConfirm, onBack }: ConflictResolverProp
       <div className="flex items-center justify-between px-5 py-4 border-t border-border bg-muted/30">
         <div className="flex gap-1.5">
           <Button variant="ghost" size="xs" onClick={() => setAll("replace")}>
-            모두 교체
+            {t("folder.replaceAll")}
           </Button>
           <Button variant="ghost" size="xs" onClick={() => setAll("new")}>
-            모두 새로 추가
+            {t("folder.addAllNew")}
           </Button>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="sm" onClick={onBack}>
-            뒤로
+            {t("common.back")}
           </Button>
           <Button size="sm" onClick={() => onConfirm(decisions)}>
-            가져오기
+            {t("common.import")}
           </Button>
         </div>
       </div>
@@ -227,6 +229,7 @@ function ConflictResolver({ conflicts, onConfirm, onBack }: ConflictResolverProp
 type Step = "tree" | "conflict" | "importing";
 
 export default function FolderTreeSelector({ tree, onConfirm, onCancel }: FolderTreeSelectorProps) {
+  const { t } = useI18n();
   const [step, setStep] = useState<Step>("tree");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [expanded, setExpanded] = useState<Set<string>>(() => {
@@ -347,9 +350,9 @@ export default function FolderTreeSelector({ tree, onConfirm, onCancel }: Folder
           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.4 0 0 5.4 0 12h4z" />
         </svg>
         <div className="text-center">
-          <p className="text-sm font-medium text-foreground">임포트를 시작하는 중…</p>
+          <p className="text-sm font-medium text-foreground">{t("folder.startingImport")}</p>
           <p className="text-xs text-muted-foreground mt-1">
-            {selected.size}개 팩 준비 중
+            {t("folder.preparingPacks", { count: selected.size })}
           </p>
         </div>
       </div>
@@ -373,13 +376,13 @@ export default function FolderTreeSelector({ tree, onConfirm, onCancel }: Folder
       {/* 헤더 */}
       <div className="flex items-center justify-between px-5 py-4 flex-0">
         <div>
-          <h2 className="text-lg font-semibold text-foreground">팩으로 가져올 폴더 선택</h2>
+          <h2 className="text-lg font-semibold text-foreground">{t("folder.selectFolders")}</h2>
           <p className="text-xs text-muted-foreground mt-0.5">
-            체크한 각 폴더가 하나의 팩으로 임포트됩니다
+            {t("folder.selectFoldersDesc")}
           </p>
         </div>
         <Button variant="ghost" size="sm" onClick={toggleAll}>
-          {isAllSelected ? "전체 해제" : "전체 선택"}
+          {isAllSelected ? t("folder.deselectAll") : t("folder.selectAll")}
         </Button>
       </div>
 
@@ -423,7 +426,7 @@ export default function FolderTreeSelector({ tree, onConfirm, onCancel }: Folder
               />
               <Folder size={16} className="shrink-0 text-muted-foreground" />
               <span className="flex-1 text-sm text-muted-foreground italic truncate">
-                {tree.name} (루트 파일)
+                {tree.name} {t("folder.rootFiles")}
               </span>
               <span className="shrink-0 flex items-center gap-1 text-xs text-muted-foreground/60">
                 <Music size={10} />
@@ -440,23 +443,22 @@ export default function FolderTreeSelector({ tree, onConfirm, onCancel }: Folder
           <Package size={14} />
           {summary.packCount > 0 ? (
             <span>
-              <span className="font-medium text-foreground">{summary.packCount}</span>개 팩 ·{" "}
-              <span className="font-medium text-foreground">{summary.totalFiles.toLocaleString()}</span>개 파일
+              {t("folder.summary", { packs: summary.packCount, files: summary.totalFiles.toLocaleString() })}
             </span>
           ) : (
-            <span>폴더를 선택해주세요</span>
+            <span>{t("folder.selectPrompt")}</span>
           )}
         </div>
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="sm" onClick={onCancel}>
-            취소
+            {t("common.cancel")}
           </Button>
           <Button
             size="sm"
             disabled={selected.size === 0 || checking}
             onClick={handleImportClick}
           >
-            {checking ? "확인 중…" : "가져오기"}
+            {checking ? t("folder.checking") : t("common.import")}
           </Button>
         </div>
       </div>

@@ -6,6 +6,7 @@ import type { LibraryStatus, ImportProgress, ImportResult, FolderNode } from "@/
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { FolderOpen } from "lucide-react";
+import { useI18n } from "@/contexts/I18nContext";
 import FolderTreeSelector from "@/components/FolderTreeSelector";
 
 interface ImportScreenProps {
@@ -14,6 +15,7 @@ interface ImportScreenProps {
 }
 
 export default function ImportScreen({ status, onComplete }: ImportScreenProps) {
+  const { t } = useI18n();
   const [importing, setImporting] = useState(false);
   const [progress, setProgress] = useState<ImportProgress | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
@@ -47,7 +49,7 @@ export default function ImportScreen({ status, onComplete }: ImportScreenProps) 
   };
 
   const handleExternalImport = async () => {
-    const selected = await open({ directory: true, title: "샘플팩 폴더 선택" });
+    const selected = await open({ directory: true, title: t("import.folderDialogTitle") });
     if (!selected) return;
 
     setError(null);
@@ -95,18 +97,18 @@ export default function ImportScreen({ status, onComplete }: ImportScreenProps) 
             </svg>
           </div>
           <div>
-            <h2 className="text-xl font-semibold text-foreground">Import 완료</h2>
+            <h2 className="text-xl font-semibold text-foreground">{t("import.complete")}</h2>
             <p className="mt-2 text-sm text-muted-foreground">
-              {result.total_packs}개 팩에서 {result.files_copied}개 파일을 복사했습니다.
+              {t("import.resultMsg", { packs: result.total_packs, files: result.files_copied })}
               {result.files_skipped > 0 && (
                 <span className="block text-muted-foreground/70">
-                  ({result.files_skipped}개 이미 존재하여 건너뜀)
+                  {t("import.skipped", { count: result.files_skipped })}
                 </span>
               )}
             </p>
           </div>
           <Button onClick={onComplete} className="px-8">
-            라이브러리 열기
+            {t("import.openLibrary")}
           </Button>
         </div>
       </div>
@@ -123,18 +125,18 @@ export default function ImportScreen({ status, onComplete }: ImportScreenProps) 
             </svg>
           </div>
           <div className="w-full text-center">
-            <h2 className="text-xl font-semibold text-foreground">파일 복사 중…</h2>
+            <h2 className="text-xl font-semibold text-foreground">{t("import.copying")}</h2>
             {progress && progress.total_packs > 1 && (
               <p className="mt-1 text-sm text-foreground/80">
                 {progress.current_pack_name}
                 <span className="text-muted-foreground ml-1.5">
-                  ({progress.current_pack}/{progress.total_packs} 팩)
+                  ({progress.current_pack}/{progress.total_packs} {t("import.packUnit")})
                 </span>
               </p>
             )}
             {progress && (
               <p className="mt-1 text-xs text-muted-foreground">
-                {progress.current.toLocaleString()} / {progress.total.toLocaleString()} 파일 ({pct}%)
+                {progress.current.toLocaleString()} / {progress.total.toLocaleString()} {t("import.fileUnit")} ({pct}%)
               </p>
             )}
           </div>
@@ -142,7 +144,7 @@ export default function ImportScreen({ status, onComplete }: ImportScreenProps) 
           {progress && progress.total_packs > 1 && (
             <div className="w-full">
               <div className="flex justify-between text-[10px] text-muted-foreground/60 mb-1">
-                <span>팩 진행</span>
+                <span>{t("import.packProgress")}</span>
                 <span>{progress.current_pack}/{progress.total_packs}</span>
               </div>
               <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
@@ -157,7 +159,7 @@ export default function ImportScreen({ status, onComplete }: ImportScreenProps) 
           <div className="w-full">
             {progress && progress.total_packs > 1 && (
               <div className="flex justify-between text-[10px] text-muted-foreground/60 mb-1">
-                <span>파일 진행</span>
+                <span>{t("import.fileProgress")}</span>
                 <span>{pct}%</span>
               </div>
             )}
@@ -188,39 +190,39 @@ export default function ImportScreen({ status, onComplete }: ImportScreenProps) 
           </div>
 
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Slice에 오신 것을 환영합니다</h1>
+            <h1 className="text-2xl font-bold text-foreground">{t("import.welcome")}</h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              Splice에서 다운로드한 샘플을 Slice 라이브러리로 복사합니다.
+              {t("import.welcomeDesc")}
               <br />
-              원본 파일은 변경되지 않습니다.
+              {t("import.welcomeNote")}
             </p>
           </div>
 
           <div className="flex flex-col items-center gap-3">
             {status.splice_available ? (
               <Button onClick={handleImport} size="lg" className="w-full px-8">
-                Splice에서 가져오기
+                {t("import.fromSplice")}
               </Button>
             ) : (
               <div className="rounded-lg bg-card/50 p-4">
                 <p className="text-sm text-muted-foreground">
-                  <span className="font-medium text-foreground">~/Splice</span> 디렉토리를
-                  찾을 수 없습니다.
+                  <span className="font-medium text-foreground">~/Splice</span>{" "}
+                  {t("import.spliceNotFound1")}
                   <br />
-                  Splice에서 샘플을 다운로드한 후 다시 시도해 주세요.
+                  {t("import.spliceNotFound2")}
                 </p>
               </div>
             )}
 
             <div className="flex items-center gap-3 w-full">
               <div className="h-px flex-1 bg-border" />
-              <span className="text-xs text-muted-foreground/60">또는</span>
+              <span className="text-xs text-muted-foreground/60">{t("import.or")}</span>
               <div className="h-px flex-1 bg-border" />
             </div>
 
             <Button onClick={handleExternalImport} variant="outline" size="lg" className="w-full px-8 gap-2">
               <FolderOpen size={16} />
-              외부 폴더에서 가져오기
+              {t("import.fromFolder")}
             </Button>
           </div>
 

@@ -1,6 +1,7 @@
 import { Outlet } from "@tanstack/react-router";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useApp } from "@/contexts/AppContext";
+import { useI18n } from "@/contexts/I18nContext";
 import NavRail from "@/components/NavRail";
 import Player from "@/components/Player";
 import ImportScreen from "@/components/ImportScreen";
@@ -51,6 +52,7 @@ export default function App() {
     cancelFolderSelect,
     confirmFolderSelect,
   } = useApp();
+  const { t } = useI18n();
 
   // ── Loading ─────────────────────────────────────────────────────
   if (phase === "loading") {
@@ -134,18 +136,18 @@ export default function App() {
               </svg>
             </div>
             <div className="w-full text-center">
-              <h3 className="text-base font-semibold text-foreground">외부 팩 임포트 중…</h3>
+              <h3 className="text-base font-semibold text-foreground">{t("app.externalImporting")}</h3>
               {externalProgress && externalProgress.total_packs > 1 && (
                 <p className="mt-1 text-sm text-foreground/80">
                   {externalProgress.current_pack_name}
                   <span className="text-muted-foreground ml-1.5">
-                    ({externalProgress.current_pack}/{externalProgress.total_packs} 팩)
+                    ({externalProgress.current_pack}/{externalProgress.total_packs} {t("import.packUnit")})
                   </span>
                 </p>
               )}
               {externalProgress && (
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {externalProgress.current.toLocaleString()} / {externalProgress.total.toLocaleString()} 파일 ({extPct}%)
+                  {externalProgress.current.toLocaleString()} / {externalProgress.total.toLocaleString()} {t("import.fileUnit")} ({extPct}%)
                 </p>
               )}
             </div>
@@ -153,7 +155,7 @@ export default function App() {
             {externalProgress && externalProgress.total_packs > 1 && (
               <div className="w-full">
                 <div className="flex justify-between text-[10px] text-muted-foreground/60 mb-1">
-                  <span>팩 진행</span>
+                  <span>{t("app.packProgress")}</span>
                   <span>{externalProgress.current_pack}/{externalProgress.total_packs}</span>
                 </div>
                 <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
@@ -168,7 +170,7 @@ export default function App() {
             <div className="w-full">
               {externalProgress && externalProgress.total_packs > 1 && (
                 <div className="flex justify-between text-[10px] text-muted-foreground/60 mb-1">
-                  <span>파일 진행</span>
+                  <span>{t("app.fileProgress")}</span>
                   <span>{extPct}%</span>
                 </div>
               )}

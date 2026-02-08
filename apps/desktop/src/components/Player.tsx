@@ -4,6 +4,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Pause, Play, Square, Music, Scissors, Undo2 } from "lucide-react";
 import Waveform from "@/components/Waveform";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/contexts/I18nContext";
 import type { Sample, WaveformData } from "@/types";
 
 // 물리 키코드 기반 (한글 입력기에서도 동작)
@@ -132,6 +133,7 @@ export default function Player({
     }
   }, [progress, activeChopIdx, onChopStop]);
 
+  const { t } = useI18n();
   const pct = duration > 0 ? progress / duration : 0;
 
   const handleWaveformSeek = (fraction: number) => {
@@ -200,7 +202,7 @@ export default function Player({
                       className="text-2xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                       onClick={() => onTranspose(0)}
                     >
-                      초기화
+                      {t("player.reset")}
                     </button>
                   )}
                 </div>
@@ -281,7 +283,7 @@ export default function Player({
                       className="text-2xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                       onClick={() => onChopModeChange(null)}
                     >
-                      끄기
+                      {t("player.chopOff")}
                     </button>
                   )}
                 </div>

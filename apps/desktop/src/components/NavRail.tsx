@@ -1,6 +1,7 @@
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { cn } from "@/lib/utils";
 import { useApp } from "@/contexts/AppContext";
+import { useI18n } from "@/contexts/I18nContext";
 import { Disc3, FolderOpen, Home, Settings } from "lucide-react";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 
@@ -14,6 +15,7 @@ export default function NavRail() {
   const location = useLocation();
   const navigate = useNavigate();
   const { lastSoundsSearch } = useApp();
+  const { t } = useI18n();
   const path = location.pathname;
 
   const isSettingsActive = path.startsWith("/settings");
@@ -80,7 +82,7 @@ export default function NavRail() {
                 <Settings size={20} />
               </Link>
             </TooltipTrigger>
-            <TooltipContent>설정</TooltipContent>
+            <TooltipContent>{t("nav.settings")}</TooltipContent>
           </Tooltip>
         </div>
       </div>
