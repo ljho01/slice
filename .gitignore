@@ -5,12 +5,11 @@ bun.lockb
 # 빌드 결과물
 dist/
 dist-ssr/
-target/
-src-tauri/target/
+**/target/
 
 # Tauri
-src-tauri/gen/
-src-tauri/WixTools/
+**/src-tauri/gen/
+**/src-tauri/WixTools/
 
 # 로그
 *.log
@@ -25,7 +24,6 @@ yarn-error.log*
 *.swp
 *.swo
 *~
-.DS_Store
 
 # 환경 변수
 .env

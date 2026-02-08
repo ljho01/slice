@@ -3532,7 +3532,7 @@ checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
 
 [[package]]
 name = "slice"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "dirs 5.0.1",
  "regex",
@@ -3545,6 +3545,7 @@ dependencies = [
  "tauri-build",
  "tauri-plugin-dialog",
  "tauri-plugin-drag",
+ "tauri-plugin-process",
  "tauri-plugin-updater",
  "zip 2.4.2",
 ]
@@ -4127,6 +4128,16 @@ dependencies = [
  "thiserror 2.0.18",
  "toml 0.9.11+spec-1.1.0",
  "url",
+]
+
+[[package]]
+name = "tauri-plugin-process"
+version = "2.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d55511a7bf6cd70c8767b02c97bf8134fa434daf3926cfc1be0a0f94132d165a"
+dependencies = [
+ "tauri",
+ "tauri-plugin",
 ]
 
 [[package]]
