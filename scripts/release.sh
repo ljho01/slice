@@ -296,7 +296,7 @@ PUB_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 TAR_FILENAME=$(basename "$APP_TAR")
 PLATFORM_KEY="darwin-$ARCH_LABEL"
 
-LATEST_JSON="$ROOT_DIR/tmp_latest.json"
+LATEST_JSON="/tmp/latest.json"
 
 cat > "$LATEST_JSON" <<EOF
 {
@@ -348,7 +348,7 @@ EOF
   "$DMG" \
   "$APP_TAR" \
   "$APP_SIG" \
-  "$LATEST_JSON#latest.json"
+  "$LATEST_JSON"
 
 success "GitHub Release 생성 완료"
 
