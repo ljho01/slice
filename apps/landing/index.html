@@ -76,7 +76,7 @@
       </div>
 
       <div class="flex flex-col sm:flex-row items-center gap-4 pt-2">
-        <a href="https://github.com/ljho01/slice/releases/latest/download/Slice_0.1.0_aarch64.dmg"
+        <a id="download-btn" href="https://github.com/ljho01/slice/releases/latest"
           class="group flex items-center gap-2 px-5 py-2.5 text-sm font-medium rounded-lg bg-zinc-100 text-black hover:bg-white transition-all shadow-[0_0_20px_-5px_rgba(255,255,255,0.1)] cursor-pointer no-underline">
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4">
@@ -200,6 +200,17 @@
       </div>
     </footer>
   </div>
+  <script>
+    fetch('https://api.github.com/repos/ljho01/slice/releases/latest')
+      .then(r => r.json())
+      .then(release => {
+        const dmg = release.assets?.find(a => a.name.endsWith('.dmg'));
+        if (dmg) {
+          document.getElementById('download-btn').href = dmg.browser_download_url;
+        }
+      })
+      .catch(() => {});
+  </script>
 </body>
 
 </html>
