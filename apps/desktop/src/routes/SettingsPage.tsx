@@ -188,12 +188,17 @@ export default function SettingsPage() {
             setUpdateStatus("downloading");
             const toastId = toast.loading(t("update.downloading"));
             try {
-              await update.downloadAndInstall();
+              await update.downloadAndInstall((event) => {
+                if (event.event === "Started") {
+                  toast.loading(t("update.downloading"), { id: toastId });
+                }
+              });
               setUpdateStatus("installing");
               toast.loading(t("update.installing"), { id: toastId });
               await relaunch();
             } catch (err) {
-              toast.error(t("update.failed"), { id: toastId });
+              const msg = err instanceof Error ? err.message : String(err);
+              toast.error(`${t("update.failed")}: ${msg}`, { id: toastId, duration: 10000 });
               setUpdateStatus("idle");
               console.error("Update failed:", err);
             }

@@ -78,11 +78,16 @@ export default function App() {
             onClick: async () => {
               const downloadToastId = toast.loading(t("update.downloading"));
               try {
-                await update.downloadAndInstall();
+                await update.downloadAndInstall((event) => {
+                  if (event.event === "Started") {
+                    toast.loading(t("update.downloading"), { id: downloadToastId });
+                  }
+                });
                 toast.loading(t("update.installing"), { id: downloadToastId });
                 await relaunch();
               } catch (err) {
-                toast.error(t("update.failed"), { id: downloadToastId });
+                const msg = err instanceof Error ? err.message : String(err);
+                toast.error(`${t("update.failed")}: ${msg}`, { id: downloadToastId, duration: 10000 });
                 console.error("Update failed:", err);
               }
             },

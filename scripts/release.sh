@@ -249,7 +249,7 @@ log "스테이플된 .app으로 업데이터 번들 재생성 중..."
 APP_NAME=$(basename "$APP_BUNDLE")
 TAR_DIR=$(dirname "$APP_TAR")
 
-tar -czf "$APP_TAR" -C "$(dirname "$APP_BUNDLE")" "$APP_NAME"
+COPYFILE_DISABLE=1 tar -czf "$APP_TAR" -C "$(dirname "$APP_BUNDLE")" "$APP_NAME"
 success "업데이터 번들 재생성 완료"
 
 # 업데이터 서명 재생성
