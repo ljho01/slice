@@ -2,6 +2,9 @@ import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { save } from "@tauri-apps/plugin-dialog";
+import { check } from "@tauri-apps/plugin-updater";
+import { relaunch } from "@tauri-apps/plugin-process";
+import { getVersion } from "@tauri-apps/api/app";
 import { useTheme, type Theme } from "@/contexts/ThemeContext";
 import { useI18n, type Locale } from "@/contexts/I18nContext";
 import { useApp } from "@/contexts/AppContext";
@@ -17,6 +20,7 @@ import {
   Languages,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import type { Sample, ExportProgress, ImportProgress, ImportResult } from "@/types";
 
 const localeOptions: { value: Locale; label: string }[] = [
@@ -156,6 +160,53 @@ export default function SettingsPage() {
     }
   }, [refreshLibrary]);
 
+  // ── Update state ──────────────────────────────────────────────────
+  const [appVersion, setAppVersion] = useState("");
+  const [updateChecking, setUpdateChecking] = useState(false);
+  const [updateStatus, setUpdateStatus] = useState<"idle" | "upToDate" | "downloading" | "installing">("idle");
+
+  useEffect(() => {
+    getVersion().then(setAppVersion);
+  }, []);
+
+  const handleCheckUpdate = useCallback(async () => {
+    setUpdateChecking(true);
+    setUpdateStatus("idle");
+    try {
+      const update = await check();
+      if (!update) {
+        setUpdateStatus("upToDate");
+        setTimeout(() => setUpdateStatus("idle"), 3000);
+        return;
+      }
+
+      toast(t("update.available", { version: update.version }), {
+        duration: 15000,
+        action: {
+          label: t("update.install"),
+          onClick: async () => {
+            setUpdateStatus("downloading");
+            const toastId = toast.loading(t("update.downloading"));
+            try {
+              await update.downloadAndInstall();
+              setUpdateStatus("installing");
+              toast.loading(t("update.installing"), { id: toastId });
+              await relaunch();
+            } catch (err) {
+              toast.error(t("update.failed"), { id: toastId });
+              setUpdateStatus("idle");
+              console.error("Update failed:", err);
+            }
+          },
+        },
+      });
+    } catch (err) {
+      console.error("Update check failed:", err);
+    } finally {
+      setUpdateChecking(false);
+    }
+  }, [t]);
+
   const themeOptions: { value: Theme; label: string; icon: typeof Sun }[] = [
     { value: "light", label: t("settings.themeLight"), icon: Sun },
     { value: "dark", label: t("settings.themeDark"), icon: Moon },
@@ -176,6 +227,60 @@ export default function SettingsPage() {
 
       <div className="flex-1 overflow-y-auto p-6">
         <div className="mx-auto max-w-xl space-y-6">
+          {/* ── 앱 업데이트 ──────────────────────────────────────── */}
+          <section className="rounded-xl bg-card">
+            <div className="px-5 py-4">
+              <h2 className="text-sm font-semibold">{t("update.title")}</h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {t("update.titleDesc")}
+              </p>
+            </div>
+            <div className="p-5 pt-0">
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-muted-foreground">
+                  {t("update.currentVersion")}: <span className="font-mono text-foreground">v{appVersion}</span>
+                </div>
+                <button
+                  onClick={handleCheckUpdate}
+                  disabled={updateChecking || updateStatus === "downloading" || updateStatus === "installing"}
+                  className={cn(
+                    "flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all",
+                    updateChecking || updateStatus === "downloading" || updateStatus === "installing"
+                      ? "bg-muted text-muted-foreground cursor-not-allowed"
+                      : "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+                  )}
+                >
+                  {updateStatus === "upToDate" ? (
+                    <>
+                      <Check size={16} />
+                      {t("update.upToDate")}
+                    </>
+                  ) : updateChecking ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin" />
+                      {t("update.checking")}
+                    </>
+                  ) : updateStatus === "downloading" ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin" />
+                      {t("update.downloading")}
+                    </>
+                  ) : updateStatus === "installing" ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin" />
+                      {t("update.installing")}
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw size={16} />
+                      {t("update.check")}
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </section>
+
           {/* ── 언어 설정 ──────────────────────────────────────── */}
           <section className="rounded-xl bg-card">
             <div className="px-5 py-4">

@@ -183,6 +183,19 @@ const en: Record<TranslationKey, string> = {
   "playlist.addedToast": "Added to \"{name}\"",
   "playlist.empty": "No samples",
   "playlist.emptyDesc": "Add samples from the context menu",
+
+  // Update
+  "update.available": "New version v{version} is available",
+  "update.install": "Update",
+  "update.downloading": "Downloading update…",
+  "update.installing": "Installing… App will restart soon",
+  "update.failed": "Update failed",
+  "update.upToDate": "You're up to date",
+  "update.check": "Check for Updates",
+  "update.checking": "Checking...",
+  "update.title": "App Updates",
+  "update.titleDesc": "You'll be notified when a new version is available",
+  "update.currentVersion": "Current version",
 };
 
 export default en;

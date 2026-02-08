@@ -181,6 +181,19 @@ const ko = {
   "playlist.addedToast": "\"{name}\"에 추가됨",
   "playlist.empty": "샘플이 없습니다",
   "playlist.emptyDesc": "컨텍스트 메뉴에서 샘플을 추가해보세요",
+
+  // Update
+  "update.available": "새 버전 v{version}이 있습니다",
+  "update.install": "업데이트",
+  "update.downloading": "업데이트 다운로드 중…",
+  "update.installing": "설치 중… 앱이 곧 재시작됩니다",
+  "update.failed": "업데이트 실패",
+  "update.upToDate": "최신 버전입니다",
+  "update.check": "업데이트 확인",
+  "update.checking": "확인 중...",
+  "update.title": "앱 업데이트",
+  "update.titleDesc": "새 버전이 있으면 자동으로 알려드립니다",
+  "update.currentVersion": "현재 버전",
 } as const;
 
 export type TranslationKey = keyof typeof ko;

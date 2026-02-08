@@ -1,5 +1,8 @@
+import { useEffect, useRef } from "react";
 import { Outlet } from "@tanstack/react-router";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { check } from "@tauri-apps/plugin-updater";
+import { relaunch } from "@tauri-apps/plugin-process";
 import { useApp } from "@/contexts/AppContext";
 import { useI18n } from "@/contexts/I18nContext";
 import NavRail from "@/components/NavRail";
@@ -7,7 +10,7 @@ import Player from "@/components/Player";
 import ImportScreen from "@/components/ImportScreen";
 import FolderTreeSelector from "@/components/FolderTreeSelector";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { Toaster } from "sonner";
+import { Toaster, toast } from "sonner";
 
 /** macOS 트래픽 라이트 높이만큼의 투명 드래그 히트박스 */
 function DragRegion() {
@@ -56,6 +59,40 @@ export default function App() {
     confirmFolderSelect,
   } = useApp();
   const { t } = useI18n();
+
+  // ── 자동 업데이트 체크 ───────────────────────────────────────────
+  const updateChecked = useRef(false);
+  useEffect(() => {
+    if (phase !== "ready" || updateChecked.current) return;
+    updateChecked.current = true;
+
+    (async () => {
+      try {
+        const update = await check();
+        if (!update) return; // 최신 버전
+
+        toast(t("update.available", { version: update.version }), {
+          duration: 15000,
+          action: {
+            label: t("update.install"),
+            onClick: async () => {
+              const downloadToastId = toast.loading(t("update.downloading"));
+              try {
+                await update.downloadAndInstall();
+                toast.loading(t("update.installing"), { id: downloadToastId });
+                await relaunch();
+              } catch (err) {
+                toast.error(t("update.failed"), { id: downloadToastId });
+                console.error("Update failed:", err);
+              }
+            },
+          },
+        });
+      } catch (err) {
+        console.error("Update check failed:", err);
+      }
+    })();
+  }, [phase, t]);
 
   // ── Loading ─────────────────────────────────────────────────────
   if (phase === "loading") {
