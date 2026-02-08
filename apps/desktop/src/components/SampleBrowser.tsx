@@ -33,6 +33,7 @@ import {
   ArrowLeft,
   ArrowUp,
   ArrowUpDown,
+  Check,
   ChevronDown,
   ChevronRight,
   Download,
@@ -51,6 +52,7 @@ import SampleEditDialog from "@/components/SampleEditDialog";
 import { startDrag } from "@crabnebula/tauri-plugin-drag";
 import { useI18n } from "@/contexts/I18nContext";
 import { useApp } from "@/contexts/AppContext";
+import { toast } from "sonner";
 import type { Sample, WaveformData, ExportProgress, SampleFilterSearch, SampleType, SortBy, SortDir } from "@/types";
 
 /* ── String → soft pastel color (deterministic) ── */
@@ -270,6 +272,35 @@ async function getDragIcon(): Promise<string> {
   return _dragIconPath;
 }
 
+// tauri-plugin-drag callback gives screen coordinates, but the webview needs viewport
+// coordinates. Try a few candidate offsets so drag-to-playlist works with/without window chrome.
+function getPlaylistDropTargetId(cursorPos: { x: number; y: number }): number | null {
+  const x = Number(cursorPos.x);
+  const y = Number(cursorPos.y);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+
+  const frameInsetX = Math.max(0, (window.outerWidth - window.innerWidth) / 2);
+  const titleInsetY = Math.max(0, window.outerHeight - window.innerHeight - frameInsetX);
+  const candidates: Array<[number, number]> = [
+    [x - window.screenX, y - window.screenY],
+    [x - window.screenX - frameInsetX, y - window.screenY - titleInsetY],
+    [x - window.screenX - frameInsetX, y - window.screenY - (window.outerHeight - window.innerHeight)],
+  ];
+
+  for (const [cx, cy] of candidates) {
+    const node = document.elementFromPoint(cx, cy);
+    if (!(node instanceof Element)) continue;
+    const target = node.closest<HTMLElement>("[data-playlist-drop-id]");
+    if (!target) continue;
+    const raw = target.dataset.playlistDropId;
+    if (!raw) continue;
+    const id = Number(raw);
+    if (Number.isFinite(id)) return id;
+  }
+
+  return null;
+}
+
 /* ── MiniWaveform: debounced + throttled + memory‑cached ── */
 interface WaveformCacheEntry {
   peaks: number[];
@@ -448,7 +479,8 @@ export default function SampleBrowser({
   showBack, onBack, currentSample, isPlaying, onPlaySample, onDeleteSample, onEditSample, onNavigateToPack,
   filters, onFiltersChange, deleteLabel, titleExtra,
 }: Props) {
-  const { registerPlayNext } = useApp();
+  const { registerPlayNext, addToPlaylist, playlists } = useApp();
+  const { t } = useI18n();
   const [editingSample, setEditingSample] = useState<Sample | null>(null);
   const [editOpen, setEditOpen] = useState(false);
 
@@ -460,6 +492,19 @@ export default function SampleBrowser({
   const handleEditSaved = useCallback((updated: Sample) => {
     onEditSample?.(updated);
   }, [onEditSample]);
+
+  const handleDropToPlaylist = useCallback(async (sampleId: number, cursorPos: { x: number; y: number }) => {
+    const playlistId = getPlaylistDropTargetId(cursorPos);
+    if (!playlistId) return;
+
+    const pl = playlists.find((p) => p.id === playlistId);
+    try {
+      await addToPlaylist(playlistId, [sampleId]);
+      toast(t("playlist.addedToast", { name: pl?.name || "" }), { icon: <Check size={14} /> });
+    } catch (err) {
+      console.error("addToPlaylist via drag failed:", err);
+    }
+  }, [addToPlaylist, playlists, t]);
 
   const query = filters.q || "";
   const selectedGenres = useMemo(() => new Set(filters.genres || []), [filters.genres]);
@@ -653,8 +698,6 @@ export default function SampleBrowser({
     const q = instSearch.toLowerCase();
     return meta.instruments.filter((i) => i.tag.toLowerCase().includes(q));
   }, [meta.instruments, instSearch]);
-
-  const { t } = useI18n();
 
   const instLabel = selectedInstruments.size === 0
     ? "Instrument"
@@ -1166,6 +1209,7 @@ export default function SampleBrowser({
         page={page}
         totalPages={totalPages}
         onPageChange={setPage}
+        onDropToPlaylist={handleDropToPlaylist}
       />
 
       {/* 샘플 편집 다이얼로그 */}
@@ -1247,6 +1291,7 @@ function VirtualSampleList({
   page,
   totalPages,
   onPageChange,
+  onDropToPlaylist,
 }: {
   filtered: Sample[];
   displayed: Sample[];
@@ -1264,6 +1309,7 @@ function VirtualSampleList({
   page: number;
   totalPages: number;
   onPageChange: (page: number) => void;
+  onDropToPlaylist: (sampleId: number, cursorPos: { x: number; y: number }) => void;
 }) {
   const { t } = useI18n();
   const parentRef = useRef<HTMLDivElement>(null);
@@ -1308,17 +1354,12 @@ function VirtualSampleList({
 
           const rowContent = (
             <div
-              draggable
               className={cn(
                 "group/row absolute left-0 w-full flex cursor-pointer rounded-xl items-center px-2 transition-colors gap-3",
                 isActive ? "bg-muted" : "hover:bg-secondary"
               )}
               style={{ top: vItem.start, height: ROW_HEIGHT }}
               onClick={() => onPlaySample(sample)}
-              onDragStart={(e) => {
-                e.dataTransfer.setData("application/x-slice-sample-id", String(sample.id));
-                e.dataTransfer.effectAllowed = "copy";
-              }}
               onMouseDown={(e) => {
                 if (e.button !== 0) return;
                 const startX = e.clientX;
@@ -1331,21 +1372,30 @@ function VirtualSampleList({
                   if (Math.abs(me.clientX - startX) > THRESHOLD || Math.abs(me.clientY - startY) > THRESHOLD) {
                     fired = true;
                     cleanup();
-                    getDragIcon().then((icon) => {
-                      startDrag({ item: [sample.local_path], icon });
-                    });
+                    getDragIcon()
+                      .then((icon) =>
+                        startDrag(
+                          { item: [sample.local_path], icon, mode: "copy" },
+                          ({ cursorPos }) => {
+                            onDropToPlaylist(sample.id, {
+                              x: Number(cursorPos.x),
+                              y: Number(cursorPos.y),
+                            });
+                          },
+                        ),
+                      )
+                      .catch((err) => {
+                        console.error("startDrag failed:", err);
+                      });
                   }
                 };
                 const onUp = () => cleanup();
-                const onDrag = () => { fired = true; cleanup(); };
                 const cleanup = () => {
                   window.removeEventListener("mousemove", onMove);
                   window.removeEventListener("mouseup", onUp);
-                  window.removeEventListener("dragstart", onDrag);
                 };
                 window.addEventListener("mousemove", onMove);
                 window.addEventListener("mouseup", onUp);
-                window.addEventListener("dragstart", onDrag);
               }}
             >
               {/* Thumbnail — click → navigate to pack */}

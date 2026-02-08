@@ -29,6 +29,11 @@ const tabs = [
   { to: "/sounds", label: "Sounds", icon: Disc3 },
 ] as const;
 
+function hasSampleDragType(dataTransfer: DataTransfer | null): boolean {
+  if (!dataTransfer) return false;
+  return Array.from(dataTransfer.types || []).includes("application/x-slice-sample-id");
+}
+
 export default function NavRail() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -56,7 +61,7 @@ export default function NavRail() {
   const [dropTargetId, setDropTargetId] = useState<number | null>(null);
 
   const handleDragOver = useCallback((e: DragEvent, playlistId: number) => {
-    if (e.dataTransfer.types.includes("application/x-slice-sample-id")) {
+    if (hasSampleDragType(e.dataTransfer)) {
       e.preventDefault();
       e.dataTransfer.dropEffect = "copy";
       setDropTargetId(playlistId);
@@ -159,6 +164,7 @@ export default function NavRail() {
                       <ContextMenuTrigger asChild>
                         <TooltipTrigger asChild>
                           <button
+                            data-playlist-drop-id={pl.id}
                             onClick={() =>
                               navigate({ to: "/playlist/$playlistId", params: { playlistId: String(pl.id) } })
                             }
